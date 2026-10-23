@@ -33,7 +33,17 @@ describe("amounts", () => {
     expect(formatUnits(-1n)).toBe("-0.0000001");
     expect(parseUnits("5.10000000")).toBe(51_000_000n);
   });
-  it.each([     [-1n, 1n, 1n, "mulDiv expects non-negative operands"],     [1n, -1n, 1n, "mulDiv expects non-negative operands"],     [1n, 1n, 0n, "denominator must be positive"],     [1n, 1n, -1n, "denominator must be positive"],     [-1n, 1n, 0n, "denominator must be positive"],   ])("validates mulDiv operands (%s, %s, %s)", (a, b, den, error) => {     expect(() => mulDiv(a, b, den)).toThrow(error);   });    it("refuses to round", () => {
+  it.each([
+    [-1n, 1n, 1n, "mulDiv expects non-negative operands"],
+    [1n, -1n, 1n, "mulDiv expects non-negative operands"],
+    [1n, 1n, 0n, "denominator must be positive"],
+    [1n, 1n, -1n, "denominator must be positive"],
+    [-1n, 1n, 0n, "denominator must be positive"],
+  ])("validates mulDiv operands (%s, %s, %s)", (a, b, den, error) => {
+    expect(() => mulDiv(a, b, den)).toThrow(error);
+  });
+
+  it("refuses to round", () => {
     expect(() => parseUnits("0.00000001")).toThrow(/decimal places/);
     expect(() => parseUnits("1e5")).toThrow();
   });
