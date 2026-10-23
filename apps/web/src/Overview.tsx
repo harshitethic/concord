@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatAuthorizedUnits } from "./authorizedUnits";
 import { api, type AssetSummary, type Candidate, type Network } from "./api";
 import { Addr, Badge, Button, Empty, ErrorNote, Field, Section, StatusBadge, TableWrap, Units, inputClass, useAction, when } from "./ui";
 
@@ -103,7 +104,7 @@ function WatchForm({ network, onDone }: { network: Network; onDone: (id: string)
                       </td>
                       <td className="r num">{c.trustlines.toLocaleString()}</td>
                       <td className="r">
-                        <Units value={c.authorizedUnits.replace(/\.?0+$/, "") || "0"} />
+                        <Units value={formatAuthorizedUnits(c.authorizedUnits)} />
                       </td>
                       <td>
                         <Flags c={c} />
