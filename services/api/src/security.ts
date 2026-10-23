@@ -103,7 +103,8 @@ export class Signer {
         !Number.isFinite(payload.exp) ||
         payload.exp <= this.now() ||
         !("value" in payload)
-      ) return undefined;
+      )
+        return undefined;
       return payload.value as T;
     } catch {
       return undefined;
@@ -154,6 +155,8 @@ export class RateLimiter {
 
 export class TooMany extends Error {
   constructor(readonly retryAfter: number) {
-    super(`Too many attempts. Try again in ${retryAfter < 90 ? `${retryAfter} seconds` : `${Math.ceil(retryAfter / 60)} minutes`}.`);
+    super(
+      `Too many attempts. Try again in ${retryAfter < 90 ? `${retryAfter} seconds` : `${Math.ceil(retryAfter / 60)} minutes`}.`,
+    );
   }
 }
