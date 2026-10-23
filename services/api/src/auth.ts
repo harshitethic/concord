@@ -391,6 +391,14 @@ export class Auth {
     this.db.tx(() => {
       // A fresh link for the same address replaces the one still pending.
       this.db.run("DELETE FROM invites WHERE org_id = ? AND email = ? AND accepted_at IS NULL", session.org.id, email);
+      const configured = Number(process.env.CONCORD_MAX_INVITES);
+      const limit = Number.isSafeInteger(configured) && configured > 0 ? configured : 100;
+      const count = this.db.get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM invites WHERE org_id = ? AND accepted_at IS NULL AND expires_at > ?",
+        session.org.id,
+        this.iso(),
+      )?.n ?? 0;
+      if (count >= limit) throw new Rejected(`A workspace can have at most ${limit} pending invitations.`);
       this.db.run(
         "INSERT INTO invites (id, token_hash, org_id, email, role, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         id,
