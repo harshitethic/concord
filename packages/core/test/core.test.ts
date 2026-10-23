@@ -139,6 +139,20 @@ describe("replay", () => {
     expect(() => sortEvents([{ id: "9-1" }, { id: "abc" }])).toThrow(/event id "abc"/);
     expect(() => replay([{ ...ev("mint", 1, { to: "A", amount: u(1) }), id: "1" }])).toThrow(/RPC form/);
   });
+
+  it("reports skipped malformed events missing required addresses", () => {
+    const malformedMint = ev("mint", 1, { amount: u(10) }); // missing 'to'
+    const malformedBurn = ev("burn", 2, { amount: u(5) }); // missing 'from'
+    const malformedTransfer = ev("transfer", 3, { from: "A", amount: u(1) }); // missing 'to'
+    const validMint = ev("mint", 4, { to: "A", amount: u(50) });
+
+    const s = replay([malformedMint, malformedBurn, malformedTransfer, validMint]);
+    expect(s.supply).toBe(u(50));
+    expect(s.balances.get("A")).toBe(u(50));
+    expect(s.eventCount).toBe(1);
+    expect(s.skipped).toHaveLength(3);
+    expect(s.skipped?.map((e) => e.kind)).toEqual(["mint", "burn", "transfer"]);
+  });
 });
 
 describe("position reconciliation", () => {
@@ -279,6 +293,24 @@ describe("corporate actions", () => {
     expect(r.summary.difference).toBe(-172_834n);
   });
 
+  it("validates baseDecimals and payDecimals as integers from 0 to 38", () => {
+    expect(() =>
+      dividendEntitlements(snapshot, {
+        ratePerUnit: "1",
+        baseDecimals: -1,
+        payDecimals: 7,
+      }),
+    ).toThrow("baseDecimals must be an integer from 0 to 38, got -1");
+
+    expect(() =>
+      dividendEntitlements(snapshot, {
+        ratePerUnit: "1",
+        baseDecimals: 7,
+        payDecimals: 1.5,
+      }),
+    ).toThrow("payDecimals must be an integer from 0 to 38, got 1.5");
+  });
+
   it("does not count a payer's transfer to itself as a distribution", () => {
     const cash = [
       ev("transfer", 10, { from: "PAYER", to: "PAYER", amount: u(9) }),
@@ -402,6 +434,33 @@ describe("controls log", () => {
     expect(buildControlsLog(events, instructions, options)).toEqual(
       buildControlsLog(events, instructions, options),
     );
+  });
+
+  // #52 — core is documented as reading no clock. The offending
+  // `options.asOf ? … : Date.now()` is already gone and `asOf` is required,
+  // but nothing stopped a clock read from creeping back in. This pins the
+  // invariant across ALL of packages/core/src, not one function's behaviour.
+  it("reads no clock anywhere in packages/core/src (#52)", async () => {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const srcDir = join(__dirname, "..", "src");
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (/\.(ts|js|mts|mjs)$/.test(entry)) files.push(full);
+      }
+    };
+    walk(srcDir);
+    expect(files.length).toBeGreaterThan(0);
+    const offenders = files.filter((file) => {
+      const source = readFileSync(file, "utf8");
+      // `Date.now()` and a no-argument `new Date()` both read the wall clock;
+      // `new Date(value)` parses its input and stays pure.
+      return /\bDate\.now\s*\(/.test(source) || /\bnew Date\s*\(\s*\)/.test(source);
+    });
+    expect(offenders).toEqual([]);
   });
 
   it("logs unfreeze when an initially frozen account is lifted", () => {

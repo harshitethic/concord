@@ -137,7 +137,7 @@ export function decodeEvent(raw: RawEvent): AssetEvent | undefined {
   }
   // A muxed destination turns the value into a map carrying the amount.
   const amount = typeof value === "object" && value !== null ? (value as { amount?: unknown }).amount : value;
-  if (typeof amount !== "bigint") return undefined;
+  if (typeof amount !== "bigint" || amount < 0n) return undefined;
   event.amount = amount;
   if (kind === "transfer") {
     if (addresses.length < 2) return undefined;
@@ -327,6 +327,9 @@ export class StellarSource implements ChainSource {
       );
       const body = await this.json<{ result?: T; error?: { message: string } }>(res);
       if (body.error) throw new ChainError(`Stellar RPC ${method}: ${body.error.message}`, "rejected");
+      if (body.result === undefined || body.result === null) {
+        throw new ChainError(`Stellar RPC ${method} returned no result`, "rejected");
+      }
       return body.result as T;
     });
   }
