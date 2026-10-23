@@ -23,7 +23,7 @@ describe("malformed password hashes", () => {
   it("returns 401 when a stored credential has invalid scrypt parameters", async () => {
     const h = harness();
     const c = await new Client(h.app).signUp("hash@example.test", "Hash test");
-    h.control.run("UPDATE credentials SET secret = ? WHERE user_id = ? AND kind = 'password'",
+    h.control.write("UPDATE credentials SET secret = ? WHERE user_id = ? AND kind = 'password'",
       "scrypt$3$8$1$invalid$invalid", c.userId);
     const another = new Client(h.app);
     const response = await another.call("/api/auth/signin", { body: {
