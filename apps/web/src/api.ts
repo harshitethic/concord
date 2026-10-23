@@ -55,8 +55,15 @@ export async function download(path: string, fallbackName: string): Promise<void
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
+  // Keep the element connected while the browser begins its asynchronous download.
+  document.body.appendChild(a);
+  try {
+    a.click();
+  } finally {
+    a.remove();
+    // Revoking immediately can cancel slower browsers' blob downloads.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
 }
 
 export type Network = "mainnet" | "testnet";
