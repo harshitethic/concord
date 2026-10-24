@@ -7,8 +7,8 @@ import type { Endpoint, NetworkConfig } from "./config.js";
 // Node gives each address family 250ms to connect before trying the next, which fails outright
 // on a slow link.
 setDefaultAutoSelectFamilyAttemptTimeout(5000);
-const CONCORD_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
-const USER_AGENT = `concord/${CONCORD_VERSION} (+https://github.com/useconcord/concord)`;
+const PACKAGE_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
+const USER_AGENT = `concord/${PACKAGE_VERSION} (+https://github.com/useconcord/concord)`;
 
 export interface EventPage {
   events: AssetEvent[];
