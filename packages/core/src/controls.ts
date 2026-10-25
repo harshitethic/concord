@@ -49,7 +49,9 @@ export function parseInstructionsCsv(
       };
       if (type === "clawback") {
         if (!values.units) throw new Error("clawback needs units");
-        instruction.units = parseUnits(values.units, decimals);
+        const units = parseUnits(values.units, decimals);
+        if (units <= 0n) throw new Error("clawback units must be greater than zero");
+        instruction.units = units;
       }
       if (values.approved_by) instruction.approvedBy = values.approved_by;
       if (values.reason) instruction.reason = values.reason;
@@ -129,7 +131,7 @@ export function controlEvents(
     const base = { eventId: ev.id, account: ev.from, ledger: ev.ledger, closedAt: ev.closedAt, txHash: ev.txHash };
     if (ev.kind === "clawback") {
       out.push({ ...base, type: "clawback", units: ev.amount });
-    } else if (ev.kind === "set_authorized") {
+    } else if (ev.kind === "set_authorized" && ev.authorized !== undefined) {
       if (ev.authorized) {
         out.push({ ...base, type: frozen.has(ev.from) ? "unfreeze" : "authorize" });
         frozen.delete(ev.from);
