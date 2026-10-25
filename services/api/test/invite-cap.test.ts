@@ -1,12 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { loadConfig } from "../src/config.js";
 import { Client, harness } from "./helpers.js";
-
-afterEach(() => vi.unstubAllEnvs());
 
 describe("pending invitation cap", () => {
   it("limits distinct active invites but permits replacement and revocation", async () => {
-    vi.stubEnv("CONCORD_MAX_INVITES", "2");
-    const h = harness();
+    const h = harness({}, undefined, { maxInvites: 2 });
     const owner = await new Client(h.app).signUp("owner@example.test", "Limited");
     const create = async (email: string) =>
       owner.call("/api/org/invites", { body: { email, role: "member" } });
@@ -21,5 +19,17 @@ describe("pending invitation cap", () => {
     const id = invites.invites.find((invite) => invite.email === "a@example.test")!.id;
     expect((await owner.call("/api/org/invites/" + id, { method: "DELETE" })).status).toBe(200);
     expect((await create("c@example.test")).status).toBe(201);
+  });
+});
+
+describe("CONCORD_MAX_INVITES", () => {
+  it("defaults to 100 and accepts whole numbers from 1 to 10000", () => {
+    expect(loadConfig({}).maxInvitesPerOrg).toBe(100);
+    expect(loadConfig({ CONCORD_MAX_INVITES: "1" }).maxInvitesPerOrg).toBe(1);
+    expect(loadConfig({ CONCORD_MAX_INVITES: "10000" }).maxInvitesPerOrg).toBe(10000);
+  });
+
+  it.each(["0", "-1", "1.5", "many", "10001"])("rejects %s rather than falling back silently", (value) => {
+    expect(() => loadConfig({ CONCORD_MAX_INVITES: value })).toThrow(/CONCORD_MAX_INVITES/);
   });
 });
