@@ -57,7 +57,8 @@ export function clientIp(c: Context, trustProxyHops: number): string {
 }
 
 export async function jsonBody<T>(c: Context): Promise<T> {
-  if (!(c.req.header("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+  const mediaType = (c.req.header("content-type") ?? "").split(";", 1)[0]?.trim().toLowerCase();
+  if (mediaType !== "application/json") {
     throw new Invalid("request body must be JSON");
   }
   let value: unknown;
@@ -177,10 +178,11 @@ export function authRoutes(auth: Auth, options: ApiOptions): Hono {
   app.post("/signin", async (c) => {
     const input = await jsonBody<{ email: unknown; password: unknown }>(c);
     const email = typeof input.email === "string" ? input.email.trim().toLowerCase().slice(0, 254) : "";
-    limit(`signin:${clientIp(c, options.trustProxyHops)}`, 20, 10 * MINUTE);
     const failures = `signin-failed:${email}`;
     const locked = limiter.blocked(failures, 10);
     if (locked > 0) throw new TooMany(locked);
+    // A locked email must not drain the shared IP allowance for unrelated users.
+    limit(`signin:${clientIp(c, options.trustProxyHops)}`, 20, 10 * MINUTE);
     try {
       const { userId, orgId } = await auth.signIn(email, input.password);
       limiter.clear(failures);
@@ -344,7 +346,9 @@ export function authRoutes(auth: Auth, options: ApiOptions): Hono {
       return back(c, "/");
     } catch (err) {
       if (err instanceof Conflict) return failed("google_exists");
-      if (err instanceof Rejected) return failed("google_mismatch");
+      if (err instanceof Rejected) {
+        return failed(err.message.includes("valid email address") ? "google_invalid_email" : "google_mismatch");
+      }
       if (err instanceof Forbidden) return failed(profile.emailVerified ? "signup_code" : "google_unverified");
       console.error(err);
       return failed("google_failed");

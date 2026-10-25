@@ -74,7 +74,7 @@ export function createApi(tenants: Tenants, auth: Auth, options: ApiOptions): Ho
   });
 
   app.get("/api/health", (c) => {
-    auth.orgIds();
+    auth.pingDb();
     return c.json({ ok: true });
   });
 
@@ -88,6 +88,9 @@ export function createApi(tenants: Tenants, auth: Auth, options: ApiOptions): Ho
     if (!session) throw new Unauthorized("Sign in to continue.");
     // A tab still showing another workspace must not act on this one.
     const shown = c.req.header("x-concord-org");
+    const browserMutation =
+      c.req.header("sec-fetch-site") !== undefined && !["GET", "HEAD", "OPTIONS"].includes(c.req.method);
+    if (browserMutation && !shown) throw new Conflict("This browser tab is missing its workspace context. Reload it.");
     if (shown && shown !== session.org.id) throw new Conflict("This tab is showing a different workspace. Reload it.");
     c.set("session", session);
     c.set("ws", tenants.forOrg(session.org.id));
@@ -102,6 +105,7 @@ export function createApi(tenants: Tenants, auth: Auth, options: ApiOptions): Ho
     const out: { from?: string; to?: string } = {};
     const from = c.req.query("from");
     const to = c.req.query("to");
+    if (from && to && from > to) throw new Invalid("from must not be after to");
     if (from) out.from = from;
     if (to) out.to = to;
     return out;
@@ -151,7 +155,7 @@ export function createApi(tenants: Tenants, auth: Auth, options: ApiOptions): Ho
     const { session } = c.var;
     // Anyone may leave; removing someone else takes an owner.
     if (c.req.param("userId") !== session.user.id) owner(c);
-    auth.removeMember(session.org.id, c.req.param("userId"));
+    auth.removeMember(session.org.id, c.req.param("userId"), session.user.id);
     return c.json({ ok: true });
   });
   priv.patch("/org", async (c) => {
@@ -221,7 +225,7 @@ export function createApi(tenants: Tenants, auth: Auth, options: ApiOptions): Ho
   });
   priv.post("/assets/:id/rebuild", async (c) => {
     const { ws } = c.var;
-    throttle(c, "watch", 20, 10 * 60_000);
+    throttle(c, "rebuild", 20, 10 * 60_000);
     return c.json(ws.assetSummary(await ws.rebuild(id(c), { defer: true })));
   });
 

@@ -92,6 +92,17 @@ export class Auth {
     return new Date(this.now() + offsetMs).toISOString();
   }
 
+  /** Remove abandoned identity records using the same clock as session validation. */
+  purgeExpired(): { sessions: number; invites: number; tokens: number } {
+    const now = this.iso();
+    const idle = this.iso(-SESSION_IDLE_MS);
+    return this.db.tx(() => ({
+      sessions: this.db.write("DELETE FROM sessions WHERE expires_at <= ? OR last_seen_at <= ?", now, idle),
+      invites: this.db.write("DELETE FROM invites WHERE expires_at <= ?", now),
+      tokens: this.db.write("DELETE FROM one_time_tokens WHERE expires_at <= ? OR used_at IS NOT NULL", now),
+    }));
+  }
+
   // ── accounts ──────────────────────────────────────────────────────────────
 
   private createOrg(name: string): string {
@@ -310,6 +321,11 @@ export class Auth {
     return Boolean(this.db.get("SELECT 1 AS x FROM orgs WHERE id = ?", orgId));
   }
 
+  /** Cheap liveness check: do not materialize all workspace IDs on each probe. */
+  pingDb(): void {
+    this.db.get("SELECT 1");
+  }
+
   orgIds(): string[] {
     return this.db.all<{ id: string }>("SELECT id FROM orgs ORDER BY created_at").map((r) => r.id);
   }
@@ -354,10 +370,14 @@ export class Auth {
     this.db.write("DELETE FROM users WHERE id NOT IN (SELECT user_id FROM memberships)");
   }
 
-  removeMember(orgId: string, userId: string): void {
+  removeMember(orgId: string, userId: string, actorId: string): void {
     this.db.tx(() => {
       const member = this.db.get<{ role: Role }>("SELECT role FROM memberships WHERE org_id = ? AND user_id = ?", orgId, userId);
       if (!member) throw new Rejected("That person is not in this workspace.");
+      if (actorId === userId) {
+        const count = this.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM memberships WHERE user_id = ?", userId)?.n ?? 0;
+        if (count <= 1) throw new Rejected("You cannot leave your only workspace. Join another first.");
+      }
       if (member.role === "owner" && this.owners(orgId) === 1) {
         throw new Rejected("A workspace needs an owner. Make someone else an owner first, or delete the workspace.");
       }
@@ -515,7 +535,10 @@ export class Auth {
     if (this.userByEmail(email)) {
       throw new Conflict("An account with this email already exists. Sign in with its password, then connect Google under Settings.");
     }
-    const name = cleanName(profile.name || email.split("@")[0], "Your name");
+    // Google profile names may be longer than our local account-name limit.
+    const fallbackName = email.split("@")[0] ?? "Google user";
+    const displayName = (profile.name || fallbackName).trim().replace(/\s+/g, " ").slice(0, 80);
+    const name = cleanName(displayName || fallbackName.slice(0, 80), "Your name");
     return this.db.tx(() => {
       if (!invited) this.spendSignupCode(context.code);
       const userId = this.createUser(email, name, true);

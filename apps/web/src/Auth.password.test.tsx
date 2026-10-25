@@ -32,7 +32,7 @@ describe("Password field", () => {
     expect(screen.queryByText(/at least 10 characters/i)).not.toBeInTheDocument();
   });
 
-  it("toggles visibility and ARIA pressed state without changing entered text", async () => {
+  it("toggles visibility without changing entered text", async () => {
     const user = userEvent.setup();
     render(<PasswordHarness fresh />);
     const field = screen.getByLabelText("Password");
@@ -41,8 +41,21 @@ describe("Password field", () => {
     await user.click(screen.getByRole("button", { name: "Show" }));
     expect(field).toHaveAttribute("type", "text");
     expect(field).toHaveValue("long-enough-password");
-    expect(screen.getByRole("button", { name: "Hide" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Hide" })).not.toHaveAttribute("aria-pressed");
     await user.click(screen.getByRole("button", { name: "Hide" }));
     expect(field).toHaveAttribute("type", "password");
+  });
+});
+
+describe("password visibility control", () => {
+  it("uses a changing action label without contradictory pressed semantics", async () => {
+    render(<Password label="Password" value="secret" onChange={vi.fn()} />);
+    const show = screen.getByRole("button", { name: "Show" });
+    expect(show).not.toHaveAttribute("aria-pressed");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+    await userEvent.click(show);
+    const hide = screen.getByRole("button", { name: "Hide" });
+    expect(hide).not.toHaveAttribute("aria-pressed");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
   });
 });
