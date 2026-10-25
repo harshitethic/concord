@@ -11,7 +11,6 @@ import {
   Figures,
   IssueList,
   LOCAL_TIME_HINT,
-  Notice,
   Section,
   Skeleton,
   StatusBadge,
