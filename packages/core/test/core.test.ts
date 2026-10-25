@@ -4,11 +4,13 @@ import {
   controlEvents,
   dividendEntitlements,
   formatUnits,
+  mulDiv,
   observeFlows,
   parseCsv,
   parseInstructionsCsv,
   parseJournalCsv,
   parseRegisterCsv,
+  parseRatio,
   parseUnits,
   reconcileDistribution,
   reconcileMovements,
@@ -32,6 +34,68 @@ describe("amounts", () => {
     expect(formatUnits(-1n)).toBe("-0.0000001");
     expect(parseUnits("5.10000000")).toBe(51_000_000n);
   });
+  it.each([
+    ["0", 0n, 1n],
+    ["0.5", 5n, 10n],
+    ["10", 10n, 1n],
+    ["0.0123456789", 123456789n, 10n ** 10n],
+    [" 1 ", 1n, 1n],
+  ])("parses non-negative ratio %j exactly", (raw, num, den) => {
+    expect(parseRatio(raw)).toEqual({ num, den });
+  });
+
+  it.each(["-1", "1e-3", ".5", "1,5", ""])("rejects invalid ratio %j", (raw) => {
+    expect(() => parseRatio(raw)).toThrow(`not a non-negative decimal: "${raw}"`);
+  });
+
+  it.each([
+    ["1,234", 12_340_000_000n],
+    ["12,345,678", 123_456_780_000_000n],
+    ["-1,234.5", -12_345_000_000n],
+  ])("accepts grouped amount %s", (raw, units) => {
+    expect(parseUnits(raw)).toBe(units);
+  });
+
+  it.each(["1,23", "12,3456", "1,50,000", ",5", "1,,000"])(
+    "rejects malformed grouping in %s",
+    (raw) => {
+      expect(() => parseUnits(raw)).toThrow(`not a decimal amount: "${raw}"`);
+    },
+  );
+
+  it.each([
+    [0n, 7, "0"],
+    [1n, 7, "0.0000001"],
+    [-1n, 7, "-0.0000001"],
+    [10_000_000n, 7, "1"],
+    [12_345_678n, 7, "1.2345678"],
+    [5n, 0, "5"],
+    [-5n, 0, "-5"],
+    [1n, 18, "0.000000000000000001"],
+  ])("formats %s units at %i decimals", (units, decimals, expected) => {
+    const formatted = formatUnits(units, decimals);
+    expect(formatted).toBe(expected);
+    expect(formatted).not.toMatch(/\.$|\.\d*0$/);
+  });
+
+  it.each([" 12 ", "\t12\n"])("accepts surrounding whitespace in %j", (value) => {
+    expect(parseUnits(value)).toBe(120_000_000n);
+  });
+
+  it.each(["1 000", "1\u00a0000", "- 5"])("rejects interior whitespace in %j", (value) => {
+    expect(() => parseUnits(value)).toThrow(`not a decimal amount: "${value}"`);
+  });
+
+  it.each([
+    [-1n, 1n, 1n, "mulDiv expects non-negative operands"],
+    [1n, -1n, 1n, "mulDiv expects non-negative operands"],
+    [1n, 1n, 0n, "denominator must be positive"],
+    [1n, 1n, -1n, "denominator must be positive"],
+    [-1n, 1n, 0n, "denominator must be positive"],
+  ])("validates mulDiv operands (%s, %s, %s)", (a, b, den, error) => {
+    expect(() => mulDiv(a, b, den)).toThrow(error);
+  });
+
   it("refuses to round", () => {
     expect(() => parseUnits("0.00000001")).toThrow(/decimal places/);
     expect(() => parseUnits("1e5")).toThrow();
@@ -63,6 +127,73 @@ describe("journal units validation", () => {
     ]);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ ref: "J2", units: parseUnits("1.5") });
+  });
+});
+
+describe("CSV escaping matrix", () => {
+  it.each([
+    ["comma", "a,b", '"a,b"'],
+    ["double quote", 'a"b', '"a""b"'],
+    ["carriage return", "a\rb", '"a\rb"'],
+    ["line feed", "a\nb", '"a\nb"'],
+    ["CRLF", "a\r\nb", '"a\r\nb"'],
+    ["leading spaces", " a", " a"],
+    ["trailing spaces", "a ", "a "],
+    ["empty string", "", ""],
+    ["null", null, ""],
+    ["undefined", undefined, ""],
+  ])("escapes %s values", (_kind, value, escaped) => {
+    expect(toCsv(["value"], [{ value }])).toBe(`value\n${escaped}\n`);
+  });
+
+  it("escapes CSV header cells by the same rules", () => {
+    const headers = ["first,name", 'say"hi', "line\nbreak"];
+    const row = { "first,name": "one", 'say"hi': "two", "line\nbreak": "three" };
+    expect(toCsv(headers, [row])).toBe('"first,name","say""hi","line\nbreak"\none,two,three\n');
+  });
+});
+
+describe("CSV trailing empty fields", () => {
+  it("preserves trailing empty cells in nonblank rows", () => {
+    expect(parseCsv("a,b,\n1,2,")).toEqual([
+      ["a", "b", ""],
+      ["1", "2", ""],
+    ]);
+  });
+
+  it("drops rows consisting solely of empty fields", () => {
+    expect(parseCsv(",\n")).toEqual([]);
+    expect(parseCsv("a,b,\n,,\n1,2,")).toEqual([
+      ["a", "b", ""],
+      ["1", "2", ""],
+    ]);
+  });
+});
+
+describe("journal column aliases", () => {
+  it("uses legacy from/to values when canonical account cells are blank", () => {
+    const csv = [
+      "ref,date,type,from,from_account,to,to_account,units",
+      "J1,2026-10-01,transfer,GA,,GB,,2",
+      "J2,2026-10-01,transfer,,GC,,GD,3",
+    ].join("\n");
+    const { entries, issues } = parseJournalCsv(csv);
+    expect(issues).toEqual([]);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({ ref: "J1", from: "GA", to: "GB", units: parseUnits("2") });
+    expect(entries[1]).toMatchObject({ ref: "J2", from: "GC", to: "GD", units: parseUnits("3") });
+  });
+
+  it.each([
+    ["from,to", "GA,GB"],
+    ["from_account,to_account", "GA,GB"],
+  ])("keeps single naming scheme %s working", (headers, accounts) => {
+    const { entries, issues } = parseJournalCsv(
+      `ref,date,type,${headers},units\nJ3,2026-10-01,transfer,${accounts},1\n`,
+    );
+    expect(issues).toEqual([]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ from: "GA", to: "GB", units: parseUnits("1") });
   });
 });
 
@@ -189,6 +320,27 @@ describe("position reconciliation", () => {
     expect(r.breaks).toEqual([]);
     expect(r.summary.matchedLines).toBe(3);
     expect(r.lines[0]!.holderIds).toEqual(["H1", "H2"]);
+  });
+
+  it("excludes ignored treasury accounts from registerHolders and chainHolders (#33)", () => {
+    const holdings = replay([
+      ev("mint", 1, { to: "H", amount: u(100) }),
+      ev("mint", 2, { to: "TRE", amount: u(5) }),
+    ]);
+    const { positions, issues } = parseRegisterCsv(
+      "holder_id,account,units\nH1,H,100\nT1,TRE,5\n",
+    );
+    expect(issues).toEqual([]);
+
+    const result = reconcilePositions(holdings, positions, { ignore: ["TRE"] });
+    expect(result.summary.registerHolders).toBe(1);
+    expect(result.summary.chainHolders).toBe(1);
+    expect(result.summary.registerTotal).toBe(u(100));
+    expect(result.breaks).toEqual([]);
+
+    const unfiltered = reconcilePositions(holdings, positions);
+    expect(unfiltered.summary.registerHolders).toBe(2);
+    expect(unfiltered.summary.chainHolders).toBe(2);
   });
 
   it("flags every kind of break", () => {
@@ -412,6 +564,17 @@ describe("controls log", () => {
     ev("clawback", 400, { from: "B", amount: u(6) }),
     ev("mint", 2, { to: "A", amount: u(1) }),
   ];
+
+  it("does not treat set_authorized without a flag as a freeze (#42)", () => {
+    const missingFlag = ev("set_authorized", 9, { from: "A" });
+    expect(controlEvents([missingFlag])).toEqual([]);
+    expect(replay([missingFlag]).authorized.has("A")).toBe(false);
+
+    const validFreeze = ev("set_authorized", 10, { from: "A", authorized: false });
+    const validUnfreeze = ev("set_authorized", 11, { from: "A", authorized: true });
+    expect(controlEvents([missingFlag, validFreeze, validUnfreeze]).map((record) => record.type))
+      .toEqual(["freeze", "unfreeze"]);
+  });
 
   it("ties each control to its instruction and flags the rest", () => {
     const { instructions, issues } = parseInstructionsCsv(
