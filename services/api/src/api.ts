@@ -107,8 +107,10 @@ export function createApi(tenants: Tenants, auth: Auth, options: ApiOptions): Ho
     return out;
   };
   const numeric = (c: Context, name: string) => {
-    const n = Number(c.req.param(name));
-    if (!Number.isInteger(n)) throw new NotFound("not found");
+    const raw = c.req.param(name) ?? "";
+    if (!/^[1-9]\d{0,9}$/.test(raw)) throw new NotFound("not found");
+    const n = Number(raw);
+    if (!Number.isSafeInteger(n)) throw new NotFound("not found");
     return n;
   };
   const id = (c: Context) => c.req.param("id") ?? "";
@@ -274,7 +276,12 @@ export function createApi(tenants: Tenants, auth: Auth, options: ApiOptions): Ho
 
   priv.get("/assets/:id/reconciliations", (c) => c.json(c.var.ws.runs(id(c))));
   priv.post("/assets/:id/reconciliations", async (c) => {
-    const input = Number(c.req.header("content-length") ?? 0) > 0 ? await jsonBody<{ registerId?: number }>(c) : {};
+    const mediaType = (c.req.header("content-type") ?? "").split(";", 1)[0]?.trim().toLowerCase();
+    const body = mediaType === "application/json" ? await c.req.raw.clone().text() : "";
+    const input = body.trim() ? await jsonBody<{ registerId?: number }>(c) : {};
+    if (input.registerId !== undefined && (!Number.isSafeInteger(input.registerId) || input.registerId <= 0)) {
+      throw new Invalid("registerId must be a positive integer");
+    }
     return c.json(await c.var.ws.reconcile(id(c), input.registerId, c.var.actor), 201);
   });
   priv.get("/reconciliations/:id", (c) => c.json(c.var.ws.run(numeric(c, "id"))));
