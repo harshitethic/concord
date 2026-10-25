@@ -4,6 +4,7 @@ export function parseCsv(text: string): string[][] {
   let row: string[] = [];
   let field = "";
   let quoted = false;
+  let afterQuote = false;
   const src = text.replace(/^﻿/, "");
   for (let i = 0; i < src.length; i++) {
     const c = src[i]!;
@@ -14,19 +15,28 @@ export function parseCsv(text: string): string[][] {
           i++;
         } else {
           quoted = false;
+          afterQuote = true;
         }
       } else {
         field += c;
       }
+    } else if (afterQuote && (c === " " || c === "\t")) {
+      // Ignore optional spaces after a closed quoted field.
+    } else if (afterQuote && c !== "," && c !== "\n" && c !== "\r") {
+      const lines = src.slice(0, i).split(/\r\n|\r|\n/);
+      const column = lines[lines.length - 1]!.length + 1;
+      throw new Error("unexpected character after closing quote at line " + lines.length + ", column " + column);
     } else if (c === '"' && field === "") {
       quoted = true;
     } else if (c === ",") {
       row.push(field);
       field = "";
+      afterQuote = false;
     } else if (c === "\n" || c === "\r") {
       if (c === "\r" && src[i + 1] === "\n") i++;
       row.push(field);
       field = "";
+      afterQuote = false;
       rows.push(row);
       row = [];
     } else {
@@ -64,7 +74,20 @@ export function parseCsvTable(text: string): CsvTable {
 }
 
 function escape(value: unknown): string {
-  const s = value === null || value === undefined ? "" : String(value);
+  let s: string;
+  if (value === null || value === undefined) {
+    s = "";
+  } else if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new Error("cannot export invalid Date to CSV");
+    s = value.toISOString();
+  } else if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("cannot export non-finite number to CSV");
+    s = String(value);
+  } else if (typeof value === "object") {
+    throw new Error("cannot export object or array to CSV");
+  } else {
+    s = String(value);
+  }
   return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 }
 
