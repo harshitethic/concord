@@ -23,7 +23,7 @@ describe("purging expired identity records", () => {
     const h = harness();
     const code = h.auth.createSignupCode("spent");
     expect(code.length).toBeGreaterThan(0);
-    h.control.run("UPDATE one_time_tokens SET used_at = ?", new Date(h.now.value).toISOString());
+    h.control.write("UPDATE one_time_tokens SET used_at = ?", new Date(h.now.value).toISOString());
     expect(h.auth.purgeExpired()).toEqual({ sessions: 0, invites: 0, tokens: 1 });
   });
 });
