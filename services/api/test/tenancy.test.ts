@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { StrKey } from "@stellar/stellar-sdk";
 import { Auth } from "../src/auth.js";
@@ -640,7 +641,49 @@ describe("networks", () => {
     for (const weak of ["1024:8:1", "20000:8:1", "32768:8", "nope"]) {
       expect(() => loadConfig({ CONCORD_PASSWORD_COST: weak }), weak).toThrow(/CONCORD_PASSWORD_COST/);
     }
+    expect(() => loadConfig({ PORT: "70000" })).toThrow("PORT must be a whole number from 1 to 65535");
 
+    const withHeaders = loadConfig({
+      CONCORD_MAINNET_RPC_URLS: "https://x.example:8443/rpc, https://y.example:8443/rpc, https://z.example/rpc",
+      CONCORD_RPC_HEADERS: JSON.stringify({
+        "x.example": { "x-api-key": "fallback-key" },
+        "y.example": { "x-api-key": "hostname-key" },
+        "y.example:8443": { "x-api-key": "exact-key" },
+        "z.example": { "x-api-key": "standard-key" },
+      }),
+    });
+    expect(withHeaders.networks.mainnet.rpc[0]?.headers).toEqual({ "x-api-key": "fallback-key" });
+    expect(withHeaders.networks.mainnet.rpc[1]?.headers).toEqual({ "x-api-key": "exact-key" });
+    expect(withHeaders.networks.mainnet.rpc[2]?.headers).toEqual({ "x-api-key": "standard-key" });
+    // Node fetch does not support userinfo URLs: fail configuration instead of retrying forever.
+    for (const url of [
+      "https://user:password@rpc.example/secret",
+      "https://user@rpc.example",
+      "https://:password@rpc.example",
+    ]) {
+      expect(() => loadConfig({ CONCORD_MAINNET_RPC_URLS: url })).toThrow(
+        /CONCORD_MAINNET_RPC_URLS must not contain URL credentials; configure Authorization via CONCORD_RPC_HEADERS/,
+      );
+    }
+    expect(() => loadConfig({ CONCORD_TESTNET_HORIZON_URLS: "https://u:p@horizon.example" })).toThrow(
+      /CONCORD_TESTNET_HORIZON_URLS must not contain URL credentials/,
+    );
+    expect(
+      loadConfig({
+        CONCORD_MAINNET_RPC_URLS: "https://rpc.example/secret",
+        CONCORD_RPC_HEADERS: JSON.stringify({ "rpc.example": { Authorization: "Bearer token" } }),
+      }).networks.mainnet.rpc[0]?.headers,
+    ).toEqual({ Authorization: "Bearer token" });
+    for (const truthy of ["1", "true", "TRUE", "True", "yes", "YES", "on", "ON"]) {
+      expect(loadConfig({ CONCORD_EPHEMERAL: truthy }).ephemeral, truthy).toBe(true);
+    }
+    for (const falsy of ["0", "false", "FALSE", "False", "no", "NO", "off", "OFF"]) {
+      expect(loadConfig({ CONCORD_EPHEMERAL: falsy }).ephemeral, falsy).toBe(false);
+    }
+    expect(loadConfig({}).ephemeral).toBe(false);
+    for (const junk of ["maybe", "2", "none", "enabled"]) {
+      expect(() => loadConfig({ CONCORD_EPHEMERAL: junk }), junk).toThrow(/CONCORD_EPHEMERAL must be a boolean flag/);
+    }
     expect(loadConfig({ CONCORD_RPC_HEADERS: '{"mainnet.sorobanrpc.com": {"Authorization": "Bearer token"}}' })).toBeDefined();
     for (const invalid of [
       "null",
@@ -678,6 +721,28 @@ describe("chain endpoints", () => {
     return { calls, clock, deps };
   }
 
+  it.each([
+    ["600", 600_000],
+    [new Date(1_600_000).toUTCString(), 600_000],
+    ["not-a-retry-time", 30_000],
+    ["3600", 900_000],
+  ])("respects Retry-After %s for %s milliseconds", async (header, delay) => {
+    const url = "https://limited.example";
+    const { calls, clock, deps } = scripted({
+      [url]: [() => new Response("slow down", { status: 429, headers: { "retry-after": header } }), health],
+    });
+    const source = new StellarSource(network([url]), deps);
+    await expect(source.latestLedger()).rejects.toThrow(/rate limited/);
+    await expect(source.latestLedger()).rejects.toThrow(`trying again in ${delay / 1000}s`);
+    expect(calls).toHaveLength(1);
+    clock.value += delay - 1_000;
+    await expect(source.latestLedger()).rejects.toThrow(/not answering/);
+    expect(calls).toHaveLength(1);
+    clock.value += 1_000;
+    await expect(source.latestLedger()).resolves.toMatchObject({ latest: 50 });
+    expect(calls).toHaveLength(2);
+  });
+
   it("moves to the next endpoint when one is rate limited, and rests the first", async () => {
     const a = "https://a.example/secret-key-123";
     const b = "https://b.example";
@@ -689,7 +754,8 @@ describe("chain endpoints", () => {
     expect(await source.latestLedger()).toEqual({ latest: 50, oldest: 10, oldestClosedAt: new Date(1790000000 * 1000).toISOString() });
     expect(calls.map((c) => c.url)).toEqual([a, b]);
     expect(calls[0]!.headers["x-api-key"]).toBe("k");
-    // Still resting: the next call goes straight to the second endpoint.
+    // After the shared getHealth cache expires, the next call skips the resting endpoint.
+    clock.value += 2_001;
     await source.latestLedger();
     expect(calls.map((c) => c.url)).toEqual([a, b, b]);
     clock.value += 41_000;
@@ -765,7 +831,7 @@ describe("chain endpoints", () => {
   it("rests an endpoint on 401/403 with a distinct message", async () => {
     const a = "https://a.example/bad-key";
     const b = "https://b.example";
-    const { calls, deps } = scripted({
+    const { calls, deps, clock } = scripted({
       [a]: [() => new Response("unauthorized", { status: 401 })],
       [b]: [health, health],
     });
@@ -773,7 +839,8 @@ describe("chain endpoints", () => {
     const head = await source.latestLedger();
     expect(head.latest).toBe(50);
     expect(calls.map((c) => c.url)).toEqual([a, b]);
-    // Endpoint `a` is now resting due to bad API key, so next call goes straight to `b`.
+    // Once the brief getHealth cache expires, the bad-key endpoint remains rested.
+    clock.value += 2_001;
     await source.latestLedger();
     expect(calls.map((c) => c.url)).toEqual([a, b, b]);
 
@@ -941,6 +1008,47 @@ describe("what ships", () => {
     expect(() => new Db(":memory:", [...ORG_MIGRATIONS, "CREATE TABLE broken (x REFERENCES nowhere (y)); INSERT INTO broken VALUES (1);"])).toThrow();
   });
 
+  it("closes failed initialization handles across repeated schema version mismatches", () => {
+    const dir = mkdtempSync(join(tmpdir(), "concord-db-init-"));
+    const file = join(dir, "control.db");
+    try {
+      const seed = new Db(file, []);
+      seed.raw.exec("PRAGMA user_version = 777");
+      seed.close();
+      const fds = () => existsSync("/proc/self/fd") ? readdirSync("/proc/self/fd").length : undefined;
+      const before = fds();
+      for (let i = 0; i < 100; i++) {
+        expect(() => new Db(file, [])).toThrow(/at schema 777/);
+      }
+      const after = fds();
+      // Linux can count open descriptors; tolerate incidental test-runner descriptors.
+      if (before !== undefined && after !== undefined) {
+        expect(after - before).toBeLessThan(10);
+      }
+      const raw = new DatabaseSync(file);
+      raw.exec("PRAGMA user_version = 0");
+      raw.close();
+      const reopened = new Db(file, ["CREATE TABLE recovered (x INTEGER)"]);
+      expect(reopened.get<{ user_version: number }>("PRAGMA user_version")?.user_version).toBe(1);
+      reopened.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("releases database files after a syntax-error migration", () => {
+    const dir = mkdtempSync(join(tmpdir(), "concord-db-migration-"));
+    const file = join(dir, "tenant.db");
+    try {
+      expect(() => new Db(file, ["CREATE TABLE broken ("])).toThrow(/syntax|near|incomplete/i);
+      const reopened = new Db(file, ["CREATE TABLE works (x INTEGER)"]);
+      expect(reopened.get<{ user_version: number }>("PRAGMA user_version")?.user_version).toBe(1);
+      reopened.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not mask the original error when rollback fails in tx and migrate", () => {
     // 1. In migrate: COMMIT inside migration followed by invalid statement
     expect(() => {
@@ -1098,6 +1206,13 @@ describe("what ships", () => {
     }
   });
 
+  it("brackets IPv6 hosts and maps :: to 127.0.0.1 for publicUrl", () => {
+    const cfgLoopback = loadConfig({ CONCORD_HOST: "::1", CONCORD_PORT: "4400" });
+    expect(cfgLoopback.publicUrl).toBe("http://[::1]:4400");
+
+    const cfgAny = loadConfig({ CONCORD_HOST: "::", CONCORD_PORT: "4400" });
+    expect(cfgAny.publicUrl).toBe("http://127.0.0.1:4400");
+  });
   it("serves static files with correct MIME types for Vite assets and falls back to octet-stream", async () => {
     const dir = mkdtempSync(join(tmpdir(), "concord-mime-"));
     const dataDir = join(dir, "data");
