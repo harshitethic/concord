@@ -253,6 +253,21 @@ describe("Concord", () => {
     expect(concord.registers("FUND")).toHaveLength(2);
   });
 
+  it("treats the same file at the same as-of time as one register, and a different as-of time as a new one", async () => {
+    const csv = `holder_id,account,units\nA,${h1},90\n`;
+    const first = concord.importRegister("FUND", { csv, asOf: at(40) });
+    expect(first.duplicate).toBe(false);
+    await concord.reconcile("FUND", first.registerId);
+    const again = concord.importRegister("FUND", { csv, asOf: at(40) });
+    expect(again).toMatchObject({ registerId: first.registerId, duplicate: true });
+    expect(concord.registers("FUND")).toHaveLength(1);
+    expect(concord.latestRunForRegister(first.registerId)).not.toBeNull();
+    const later = concord.importRegister("FUND", { csv, asOf: at(41) });
+    expect(later).toMatchObject({ duplicate: false });
+    expect(later.registerId).not.toBe(first.registerId);
+    expect(concord.registers("FUND")).toHaveLength(2);
+  });
+
   it("rejects a register from another asset and an unknown register id", async () => {
     const reg = concord.importRegister("FUND", { csv: `holder_id,account,units\nA,${h1},90\n`, asOf: at(40) });
     await concord.watchAsset({ network: "testnet", asset: `OTHER:${issuer}`, fromLedger: 1 });
