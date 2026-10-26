@@ -290,6 +290,19 @@ describe("Concord", () => {
     expect(concord.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM break_notes")!.n).toBe(1);
   });
 
+  it("reopens a control sign-off when the instruction behind it is replaced by a changed row", async () => {
+    concord.importInstructions("FUND", `ref,type,account,units,issued_at\nI7,freeze,${h3},,${at(19)}\n`);
+    chain.latest = 6000; // past the 72h execution window
+    await concord.sync("FUND");
+    const brk = concord.controls("FUND").breaks.find((b) => b.key === "UNEXECUTED_INSTRUCTION:I7")!;
+    expect(brk.status).toBe("open");
+    concord.setNote("FUND", "controls", brk.key, { fingerprint: brk.fingerprint, status: "resolved", note: "cancelled off-chain" });
+    expect(concord.controls("FUND").breaks.find((b) => b.key === brk.key)).toMatchObject({ status: "resolved", noteStale: false });
+    // The same ref is re-imported for a different account: a different instruction, so open again.
+    concord.importInstructions("FUND", `ref,type,account,units,issued_at\nI7,freeze,${h1},,${at(19)}\n`);
+    expect(concord.controls("FUND").breaks.find((b) => b.key === brk.key)).toMatchObject({ status: "open", noteStale: true });
+  });
+
   it("rejects a register from another asset and an unknown register id", async () => {
     const reg = concord.importRegister("FUND", { csv: `holder_id,account,units\nA,${h1},90\n`, asOf: at(40) });
     await concord.watchAsset({ network: "testnet", asset: `OTHER:${issuer}`, fromLedger: 1 });
