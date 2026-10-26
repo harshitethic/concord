@@ -18,7 +18,8 @@
     "dev": "pnpm --parallel --filter @concord/api --filter @concord/web dev",
     "start": "pnpm --filter @concord/api start",
     "concord": "pnpm --silent --filter @concord/api cli",
-    "demo:testnet": "pnpm --filter @concord/api demo:testnet"
+    "demo:testnet": "pnpm --filter @concord/api demo:testnet",
+    "demo:load": "pnpm --filter @concord/api demo:load"
   },
   "devDependencies": {
     "eslint": "^10.13.0",
