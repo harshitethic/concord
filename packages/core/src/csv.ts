@@ -101,8 +101,11 @@ function escape(value: unknown): string {
   return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 }
 
-export function toCsv(headers: string[], rows: Array<Record<string, unknown>>): string {
+export interface CsvWriteOptions { eol?: "\n" | "\r\n"; bom?: boolean }
+
+export function toCsv(headers: string[], rows: Array<Record<string, unknown>>, options: CsvWriteOptions = {}): string {
   const lines = [headers.map(escape).join(",")];
   for (const r of rows) lines.push(headers.map((h) => escape(r[h])).join(","));
-  return lines.join("\n") + "\n";
+  const eol = options.eol ?? "\n";
+  return (options.bom ? "\uFEFF" : "") + lines.join(eol) + eol;
 }
