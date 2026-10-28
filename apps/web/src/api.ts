@@ -33,18 +33,21 @@ async function failure(res: Response, fallback: string, path: string): Promise<A
   return new ApiError(detail?.error ?? `${fallback} (${res.status})`, res.status);
 }
 
+const OFFLINE_MESSAGE = "The Concord server is not reachable. Check your connection and try again.";
+
+/** API and download actions must report the same friendly offline failure. */
+async function request(url: string, init: RequestInit): Promise<Response> {
+  try { return await fetch(url, init); }
+  catch { throw new ApiError(OFFLINE_MESSAGE, 0); }
+}
+
 export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`/api${path}`, {
-      method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-      headers: headers(init.body !== undefined),
-      credentials: "same-origin",
-      ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
-    });
-  } catch {
-    throw new ApiError("The Concord server is not reachable. Check your connection and try again.", 0);
-  }
+  const res = await request(`/api${path}`, {
+    method: init.method ?? (init.body === undefined ? "GET" : "POST"),
+    headers: headers(init.body !== undefined),
+    credentials: "same-origin",
+    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+  });
   if (!res.ok) throw await failure(res, "Request failed", path);
   if (res.status === 204) return undefined as T;
   try {
@@ -56,7 +59,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
 
 /** Downloads go through fetch so a failure can be shown in place instead of on a blank page. */
 export async function download(path: string, fallbackName: string): Promise<void> {
-  const res = await fetch(`/api${path}`, { headers: headers(false), credentials: "same-origin" });
+  const res = await request(`/api${path}`, { headers: headers(false), credentials: "same-origin" });
   if (!res.ok) throw await failure(res, "Download failed", path);
   const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
   const url = URL.createObjectURL(await res.blob());

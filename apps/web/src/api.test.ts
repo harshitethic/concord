@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, UNAUTHORIZED, api } from "./api";
+import { ApiError, UNAUTHORIZED, api, download } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -61,5 +61,15 @@ describe("offline API failures", () => {
 
     expect(unauthorized).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe("consistent offline download failures", () => {
+  it("wraps rejected fetch for downloads and ordinary API calls in status-0 ApiError", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    const expected = new ApiError("The Concord server is not reachable. Check your connection and try again.", 0);
+    await expect(download("/assets/a/export", "audit.csv")).rejects.toEqual(expected);
+    await expect(api("/overview")).rejects.toEqual(expected);
   });
 });
