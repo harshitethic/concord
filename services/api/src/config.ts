@@ -59,6 +59,8 @@ export interface Config {
   trustProxyHops: number;
   /** "open": anyone may create a workspace. "code": only with an operator-issued code. */
   signup: "open" | "code";
+  /** Optional public contact instruction shown to people who forgot their password. */
+  supportContact?: string;
   maxAssetsPerOrg: number;
   /** Pending invitations one workspace may hold at once. */
   maxInvitesPerOrg: number;
@@ -85,7 +87,7 @@ const KNOWN_CONCORD_SETTINGS = [
   "CONCORD_MAINNET_HORIZON_URLS", "CONCORD_MAINNET_RPC_URLS",
   "CONCORD_MAX_ASSETS", "CONCORD_MAX_INVITES", "CONCORD_ORG", "CONCORD_PASSWORD_COST",
   "CONCORD_PORT", "CONCORD_PUBLIC_URL", "CONCORD_RPC_HEADERS",
-  "CONCORD_SIGNUP", "CONCORD_SYNC_INTERVAL", "CONCORD_TESTNET_HORIZON_URLS",
+  "CONCORD_SIGNUP", "CONCORD_SUPPORT_CONTACT", "CONCORD_SYNC_INTERVAL", "CONCORD_TESTNET_HORIZON_URLS",
   "CONCORD_TESTNET_RPC_URLS", "CONCORD_TRUST_PROXY", "CONCORD_USER_AGENT_SUFFIX", "CONCORD_WEB_DIR",
 ] as const;
 const KNOWN_SETTINGS = new Set<string>(KNOWN_CONCORD_SETTINGS);
@@ -230,6 +232,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, warn: (message:
 
   const defaultNetwork = env.CONCORD_DEFAULT_NETWORK ?? "mainnet";
   if (!isNetworkName(defaultNetwork)) throw new Error("CONCORD_DEFAULT_NETWORK must be mainnet or testnet");
+  const supportContact = env.CONCORD_SUPPORT_CONTACT?.trim();
+  if (supportContact && (supportContact.length > 200 || /[\x00-\x1f\x7f]/.test(supportContact))) {
+    throw new Error("CONCORD_SUPPORT_CONTACT must be at most 200 characters with no control characters");
+  }
   const signup = env.CONCORD_SIGNUP ?? "open";
   if (signup !== "open" && signup !== "code") throw new Error("CONCORD_SIGNUP must be open or code");
 
@@ -275,6 +281,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, warn: (message:
     publicUrl,
     trustProxyHops: integer(env, "CONCORD_TRUST_PROXY", 0, 0, 10),
     signup,
+    ...(supportContact ? { supportContact } : {}),
     maxAssetsPerOrg: integer(env, "CONCORD_MAX_ASSETS", 10, 1, 1000),
     maxInvitesPerOrg: integer(env, "CONCORD_MAX_INVITES", 100, 1, 10000),
     ephemeral: flag(env, "CONCORD_EPHEMERAL", false),

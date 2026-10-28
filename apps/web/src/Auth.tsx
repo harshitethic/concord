@@ -140,6 +140,36 @@ function useSubmit(send: () => Promise<Me>) {
   return { ...action, submit };
 }
 
+/** An operator issues reset links: never imply that entering an email here requests one. */
+export function PasswordResetHelp({ contact }: { contact?: string }) {
+  const [token, setToken] = useState("");
+  const trimmedToken = token.trim();
+  return (
+    <details className="rounded border border-line bg-surface p-3 text-[13px]">
+      <summary className="cursor-pointer font-medium">Forgot your password?</summary>
+      <div className="mt-3 flex flex-col gap-3 text-muted">
+        <p>Concord does not email password resets. Contact the operator of this server and ask for a one-time reset link.</p>
+        {contact && <p>Operator contact: {contact}</p>}
+        <label className="flex flex-col gap-1">
+          <span>Already have a reset token?</span>
+          <input
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            className={inputClass}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        {trimmedToken && (
+          <a href={`#/reset/${encodeURIComponent(trimmedToken)}`} className="font-medium text-accent hover:underline">
+            Open password reset
+          </a>
+        )}
+      </div>
+    </details>
+  );
+}
+
 export function SignIn({ error }: { error?: string | undefined }) {
   const { config } = useSession();
   const [email, setEmail] = useState("");
@@ -158,6 +188,7 @@ export function SignIn({ error }: { error?: string | undefined }) {
         </Button>
         <Google label="Continue with Google" />
       </form>
+      <PasswordResetHelp contact={config.supportContact} />
       <p className="text-[13px] text-muted">
         No workspace yet?{" "}
         <a href="#/signup" className="font-medium text-accent hover:underline">

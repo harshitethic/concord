@@ -56,3 +56,18 @@ describe("known setting list", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 });
+
+
+describe("public support contact configuration", () => {
+  it("trims valid contact instructions without logging an unknown setting", () => {
+    const warn = vi.fn();
+    const config = loadConfig({ CONCORD_SUPPORT_CONTACT: "  Ask the operator at the helpdesk  " }, warn);
+    expect(config.supportContact).toBe("Ask the operator at the helpdesk");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("rejects multiline and overlong public contact text", () => {
+    expect(() => loadConfig({ CONCORD_SUPPORT_CONTACT: "hello\nworld" })).toThrow(/CONCORD_SUPPORT_CONTACT/);
+    expect(() => loadConfig({ CONCORD_SUPPORT_CONTACT: "x".repeat(201) })).toThrow(/CONCORD_SUPPORT_CONTACT/);
+  });
+});

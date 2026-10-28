@@ -12,6 +12,7 @@ export interface ApiOptions {
   /** The origin users reach the service on. */
   publicUrl: string;
   signup: "open" | "code";
+  supportContact?: string;
   ephemeral: boolean;
   networks: NetworkName[];
   defaultNetwork: NetworkName;
@@ -156,6 +157,7 @@ export function authRoutes(auth: Auth, options: ApiOptions): Hono {
   app.get("/config", (c) =>
     c.json({
       signup: options.signup,
+      ...(options.supportContact ? { supportContact: options.supportContact } : {}),
       google: Boolean(options.google),
       ephemeral: options.ephemeral,
       networks: options.networks,

@@ -78,6 +78,7 @@ export type Network = "mainnet" | "testnet";
 
 export interface AuthConfig {
   signup: "open" | "code";
+  supportContact?: string;
   google: boolean;
   /** The host erases everything on restart. */
   ephemeral: boolean;

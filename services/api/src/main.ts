@@ -97,6 +97,7 @@ export function createServerApp(runtime: Runtime, config: Config): Hono {
     createApi(runtime.tenants, runtime.auth, {
       publicUrl: config.publicUrl,
       signup: config.signup,
+      ...(config.supportContact ? { supportContact: config.supportContact } : {}),
       ephemeral: config.ephemeral,
       networks: [...NETWORK_NAMES],
       defaultNetwork: config.defaultNetwork,

@@ -1446,3 +1446,15 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+
+describe("public password reset contact", () => {
+  it("exposes only configured public contact instructions, with no account lookup", async () => {
+    const withContact = harness({ supportContact: "Contact the helpdesk" });
+    const configured = await (await withContact.app.request("/api/auth/config")).json();
+    expect(configured.supportContact).toBe("Contact the helpdesk");
+    const withoutContact = harness();
+    const defaultConfig = await (await withoutContact.app.request("/api/auth/config")).json();
+    expect(defaultConfig).not.toHaveProperty("supportContact");
+  });
+});
