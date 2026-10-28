@@ -195,8 +195,46 @@ function WatchForm({ network, onDone }: { network: Network; onDone: (id: string)
   );
 }
 
+export type OverviewSort = "default" | "breaks" | "indexed" | "units";
+
+const openBreaks = (a: AssetSummary) => a.openBreaks.reconciliation + a.openBreaks.controls + a.openBreaks.actions;
+const unitSize = (s: string) => {
+  const [whole = "0", fraction = ""] = s.split(".");
+  // Stellar balances use up to seven fractional digits; compare exactly without floats.
+  return BigInt(whole) * 10_000_000n + BigInt(fraction.padEnd(7, "0").slice(0, 7));
+};
+export function visibleAssets(assets: AssetSummary[], search: string, attention: boolean, sort: OverviewSort, descending: boolean) {
+  const needle = search.trim().toLocaleLowerCase();
+  const filtered = assets.map((asset, index) => ({ asset, index })).filter(({ asset }) =>
+    (!needle || `${asset.name} ${asset.code}`.toLocaleLowerCase().includes(needle)) &&
+    (!attention || Boolean(asset.syncError) || openBreaks(asset) > 0),
+  );
+  if (sort === "default") return filtered.map(({ asset }) => asset);
+  filtered.sort((a, b) => {
+    let cmp = 0;
+    if (sort === "breaks") cmp = openBreaks(a.asset) - openBreaks(b.asset);
+    if (sort === "indexed") cmp = (a.asset.syncedAt ?? "").localeCompare(b.asset.syncedAt ?? "");
+    if (sort === "units") {
+      const left = unitSize(a.asset.supply), right = unitSize(b.asset.supply);
+      cmp = left < right ? -1 : left > right ? 1 : 0;
+    }
+    return cmp ? (descending ? -cmp : cmp) : a.index - b.index;
+  });
+  return filtered.map(({ asset }) => asset);
+}
+
 export function Overview({ assets, network, onChange }: { assets: AssetSummary[]; network: Network; onChange: () => void }) {
   const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState("");
+  const [attention, setAttention] = useState(false);
+  const [sort, setSort] = useState<OverviewSort>("default");
+  const [descending, setDescending] = useState(true);
+  const displayed = visibleAssets(assets, search, attention, sort, descending);
+  const setSortOrder = (key: Exclude<OverviewSort, "default">) => {
+    if (sort === key) setDescending((value) => !value);
+    else { setSort(key); setDescending(key !== "indexed"); }
+  };
+  const sortDirection = (key: OverviewSort) => sort === key ? (descending ? "descending" as const : "ascending" as const) : undefined;
   return (
     <div className="flex flex-col gap-8">
       <Section
@@ -218,6 +256,19 @@ export function Overview({ assets, network, onChange }: { assets: AssetSummary[]
             }}
           />
         )}
+        {assets.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-4">
+            <label className="flex flex-1 flex-col gap-1 text-[13px]">
+              Search assets by name or code
+              <input value={search} onChange={(e) => setSearch(e.target.value)} className={inputClass} />
+            </label>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input type="checkbox" checked={attention} onChange={(e) => setAttention(e.target.checked)} />
+              Needs attention
+            </label>
+          </div>
+        )}
+        {displayed.length === 0 && assets.length > 0 && <Empty title="No assets match the filters">Change the search or attention filter.</Empty>}
         {assets.length === 0 && !adding ? (
           <Empty title={`Nothing is being watched on ${NETWORK_LABEL[network]}`}>
             Add a regulated asset to index its transfer, mint, burn, clawback and authorisation events. Then upload the
@@ -225,21 +276,21 @@ export function Overview({ assets, network, onChange }: { assets: AssetSummary[]
             the ledger. It never holds keys.
           </Empty>
         ) : (
-          assets.length > 0 && (
+          displayed.length > 0 && (
             <TableWrap>
               <table className="tbl">
                 <thead>
                   <tr>
                     <th>Asset</th>
-                    <th className="r">Units outstanding</th>
+                    <th className="r" aria-sort={sortDirection("units")}><button type="button" onClick={() => setSortOrder("units")}>Units outstanding</button></th>
                     <th className="r">Holders</th>
-                    <th>Indexed to</th>
+                    <th aria-sort={sortDirection("indexed")}><button type="button" onClick={() => setSortOrder("indexed")}>Indexed to</button></th>
                     <th>Last reconciliation</th>
-                    <th className="r">Open breaks</th>
+                    <th className="r" aria-sort={sortDirection("breaks")}><button type="button" onClick={() => setSortOrder("breaks")}>Open breaks</button></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {assets.map((a) => {
+                  {displayed.map((a) => {
                     const open = a.openBreaks.reconciliation + a.openBreaks.controls + a.openBreaks.actions;
                     const indexing = a.state === "indexing";
                     return (
