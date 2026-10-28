@@ -23,13 +23,21 @@ export function parseUnits(input: string, decimals = DEFAULT_DECIMALS): bigint {
   return negative ? -value : value;
 }
 
-export function formatUnits(value: bigint, decimals = DEFAULT_DECIMALS): string {
+export interface FormatUnitsOptions { group?: string; minFraction?: number }
+
+export function formatUnits(value: bigint, decimals = DEFAULT_DECIMALS, options: FormatUnitsOptions = {}): string {
+  const minFraction = options.minFraction ?? 0;
+  if (!Number.isInteger(minFraction) || minFraction < 0 || minFraction > 100) {
+    throw new Error("minFraction must be an integer between 0 and 100");
+  }
   const negative = value < 0n;
   const abs = negative ? -value : value;
   const base = 10n ** BigInt(decimals);
   const whole = abs / base;
   const frac = (abs % base).toString().padStart(decimals, "0").replace(/0+$/, "");
-  return `${negative ? "-" : ""}${whole}${frac ? `.${frac}` : ""}`;
+  const formattedWhole = options.group ? whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, options.group) : whole.toString();
+  const shownFraction = frac.padEnd(minFraction, "0");
+  return `${negative ? "-" : ""}${formattedWhole}${shownFraction ? `.${shownFraction}` : ""}`;
 }
 
 export function abs(value: bigint): bigint {
