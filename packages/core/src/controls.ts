@@ -1,4 +1,4 @@
-import { parseUnits, DEFAULT_DECIMALS } from "./amount.js";
+import { safeParseUnits, DEFAULT_DECIMALS } from "./amount.js";
 import { parseCsvTable } from "./csv.js";
 import type { AssetEvent } from "./events.js";
 import { sortEvents } from "./events.js";
@@ -49,7 +49,9 @@ export function parseInstructionsCsv(
       };
       if (type === "clawback") {
         if (!values.units) throw new Error("clawback needs units");
-        const units = parseUnits(values.units, decimals);
+        const parsed = safeParseUnits(values.units, decimals);
+        if (!parsed.ok) throw new Error(parsed.message);
+        const units = parsed.value;
         if (units <= 0n) throw new Error("clawback units must be greater than zero");
         instruction.units = units;
       }

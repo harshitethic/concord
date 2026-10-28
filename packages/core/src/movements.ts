@@ -1,4 +1,4 @@
-import { parseUnits, DEFAULT_DECIMALS } from "./amount.js";
+import { safeParseUnits, DEFAULT_DECIMALS } from "./amount.js";
 import { parseCsvTable } from "./csv.js";
 import type { AssetEvent, EventKind } from "./events.js";
 import { sortEvents } from "./events.js";
@@ -57,7 +57,9 @@ export function parseJournalCsv(
       if (!type) throw new Error(`unknown type "${values.type}"`);
       if (!values.ref) throw new Error("missing ref");
       if (Number.isNaN(Date.parse(values.date!))) throw new Error(`bad date "${values.date}"`);
-      const units = parseUnits(values.units!, decimals);
+      const parsed = safeParseUnits(values.units!, decimals);
+      if (!parsed.ok) throw new Error(parsed.message);
+      const units = parsed.value;
       if (units <= 0n) throw new Error("units must be greater than zero");
       const entry: JournalEntry = {
         ref: values.ref,

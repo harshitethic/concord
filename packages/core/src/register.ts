@@ -1,4 +1,4 @@
-import { parseUnits, DEFAULT_DECIMALS } from "./amount.js";
+import { safeParseUnits, DEFAULT_DECIMALS } from "./amount.js";
 import { parseCsvTable } from "./csv.js";
 
 export type HolderStatus = "active" | "frozen";
@@ -63,7 +63,9 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
     try {
       const holderId = values[idCol]!;
       if (!holderId) throw new Error("missing holder_id");
-      const position: RegisterPosition = { holderId, units: parseUnits(values[unitsCol]!, decimals) };
+      const parsed = safeParseUnits(values[unitsCol]!, decimals);
+      if (!parsed.ok) throw new Error(parsed.message);
+      const position: RegisterPosition = { holderId, units: parsed.value };
       if (position.units < 0n) throw new Error("negative units");
       if (nameCol && values[nameCol]) position.holderName = values[nameCol];
       if (accountCol && values[accountCol]) position.account = values[accountCol];

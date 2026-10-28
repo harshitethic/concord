@@ -23,6 +23,25 @@ export function parseUnits(input: string, decimals = DEFAULT_DECIMALS): bigint {
   return negative ? -value : value;
 }
 
+export type SafeParseUnits =
+  | { ok: true; value: bigint }
+  | { ok: false; code: "INVALID_DECIMAL" | "PRECISION_EXCEEDED" | "INVALID_DECIMALS" | "PARSE_ERROR"; message: string };
+
+/** A non-throwing companion for imports and interactive CSV previews. */
+export function safeParseUnits(input: string, decimals = DEFAULT_DECIMALS): SafeParseUnits {
+  if (!Number.isSafeInteger(decimals) || decimals < 0) {
+    return { ok: false, code: "INVALID_DECIMALS", message: "decimals must be a non-negative integer" };
+  }
+  try {
+    return { ok: true, value: parseUnits(input, decimals) };
+  } catch (error) {
+    const message = (error as Error).message;
+    const code = message.includes("decimal places") ? "PRECISION_EXCEEDED"
+      : message.startsWith("not a decimal amount") ? "INVALID_DECIMAL" : "PARSE_ERROR";
+    return { ok: false, code, message };
+  }
+}
+
 export function formatUnits(value: bigint, decimals = DEFAULT_DECIMALS): string {
   const negative = value < 0n;
   const abs = negative ? -value : value;
