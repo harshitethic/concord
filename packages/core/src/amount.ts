@@ -58,3 +58,21 @@ export function mulDiv(value: bigint, num: bigint, den: bigint, rounding: Roundi
   const product = value * num;
   return rounding === "half-up" ? (product * 2n + den) / (den * 2n) : product / den;
 }
+
+/** Parse human-entered fractions (3/2), ratios (2:1), and rates (5%) exactly. */
+export function parseRatioExpr(input: string): Ratio {
+  const s = input.trim();
+  if (s.endsWith("%")) {
+    const fraction = parseRatio(s.slice(0, -1));
+    return { num: fraction.num, den: fraction.den * 100n };
+  }
+  if (s.includes("/") || s.includes(":")) {
+    const parts = s.split(/[/\:]/);
+    if (parts.length !== 2) throw new Error(`invalid ratio: "${input}"`);
+    const numerator = parseRatio(parts[0]!.trim());
+    const denominator = parseRatio(parts[1]!.trim());
+    if (denominator.num === 0n) throw new Error("ratio denominator must be positive");
+    return { num: numerator.num * denominator.den, den: numerator.den * denominator.num };
+  }
+  return parseRatio(s);
+}
