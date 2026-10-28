@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api, type Break } from "./api";
 import { useMe } from "./session";
 import { Addr, Button, ErrorNote, Field, StatusBadge, TableWrap, Tx, Units, inputClass, useAction, when } from "./ui";
@@ -133,6 +133,8 @@ function BreakRow(props: {
   onDone: () => void;
 }) {
   const { item: b, control } = props;
+  const detailsId = useId();
+  const name = `${LABELS[b.type] ?? b.type} ${b.address ?? b.ref ?? b.holderIds?.join(", ") ?? "whole asset"} (${b.key})`;
   return (
     <>
       <tr>
@@ -177,18 +179,16 @@ function BreakRow(props: {
           <StatusBadge status={b.status} />
         </td>
         <td className="r">
-          <Button onClick={props.onToggle} aria-expanded={props.expanded}>
+          <Button onClick={props.onToggle} aria-expanded={props.expanded} aria-controls={detailsId} aria-label={`${props.expanded ? "Close" : "Review"} ${name}`}>
             {props.expanded ? "Close" : "Review"}
           </Button>
         </td>
       </tr>
-      {props.expanded && (
-        <tr>
-          <td colSpan={4 + (control ? 0 : 3) + (props.firstSeen ? 1 : 0)} className="!p-0">
-            <SignOff assetId={props.assetId} item={b} onDone={props.onDone} />
-          </td>
-        </tr>
-      )}
+      <tr id={detailsId} hidden={!props.expanded}>
+        <td colSpan={4 + (control ? 0 : 3) + (props.firstSeen ? 1 : 0)} className="!p-0">
+          {props.expanded && <SignOff assetId={props.assetId} item={b} onDone={props.onDone} />}
+        </td>
+      </tr>
     </>
   );
 }
