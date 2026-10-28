@@ -24,6 +24,31 @@ import {
   when,
 } from "../ui";
 
+export type ActionFieldErrors = Partial<Record<"rate" | "num" | "den" | "until" | "payer", string>>;
+/** Mirror the service's numeric and Stellar address rules before sending a mutation. */
+export function validateActionForm(input: {
+  type: Action["type"]; record: string; until: string; rate: string; num: string; den: string; payer: string;
+}): ActionFieldErrors {
+  const errors: ActionFieldErrors = {};
+  const positiveDecimal = (v: string) => /^\d+(\.\d+)?$/.test(v) && Number(v) > 0;
+  const positiveInteger = (v: string) => /^\d+$/.test(v) && BigInt(v) > 0n;
+  if (input.until && input.record && new Date(input.until).getTime() <= new Date(input.record).getTime()) {
+    errors.until = "The execution window must end after the record time.";
+  }
+  if (input.type === "dividend") {
+    if (!positiveDecimal(input.rate.trim())) errors.rate = "Enter a positive decimal, not a percentage.";
+    const payer = input.payer.trim();
+    if (payer && !/^[GCM][A-Z2-7]{55}$/.test(payer)) errors.payer = "Enter a valid Stellar G, C or M address.";
+  } else {
+    if (!positiveInteger(input.num)) errors.num = "Enter a positive whole number.";
+    if (!positiveInteger(input.den)) errors.den = "Enter a positive whole number.";
+    if (!errors.num && !errors.den && input.type === "redemption" && BigInt(input.num) > BigInt(input.den)) {
+      errors.num = "The redemption fraction cannot exceed one.";
+    }
+  }
+  return errors;
+}
+
 function NewAction({ asset, assets, onDone }: { asset: AssetSummary; assets: AssetSummary[]; onDone: (id: number) => void }) {
   const [type, setType] = useState<Action["type"]>("dividend");
   const [label, setLabel] = useState("");
@@ -35,11 +60,15 @@ function NewAction({ asset, assets, onDone }: { asset: AssetSummary; assets: Ass
   const [num, setNum] = useState("2");
   const [den, setDen] = useState("1");
   const { busy, error, run } = useAction();
+  const [fieldErrors, setFieldErrors] = useState<ActionFieldErrors>({});
   return (
     <form
       className="flex flex-col gap-4 rounded border border-line bg-surface p-4"
       onSubmit={(e) => {
         e.preventDefault();
+        const errors = validateActionForm({ type, record, until, rate, num, den, payer });
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) return;
         void run(async () => {
           const body: Record<string, unknown> = { type, recordTime: localToIso(record) };
           if (label.trim()) body.label = label.trim();
@@ -78,13 +107,13 @@ function NewAction({ asset, assets, onDone }: { asset: AssetSummary; assets: Ass
         <Field label="Record time" hint={`Holdings at this instant set the entitlement. ${LOCAL_TIME_HINT}`}>
           <input type="datetime-local" value={record} onChange={(e) => setRecord(e.target.value)} className={inputClass} required />
         </Field>
-        <Field label="Execution window ends" hint="Optional. Open-ended when empty.">
+        <Field label="Execution window ends" hint="Optional. Open-ended when empty." error={fieldErrors.until}>
           <input type="datetime-local" value={until} onChange={(e) => setUntil(e.target.value)} className={inputClass} />
         </Field>
       </div>
       {type === "dividend" ? (
         <div className="grid gap-4 md:grid-cols-3">
-          <Field label="Rate per unit" hint="Pay-asset units per whole unit held.">
+          <Field label="Rate per unit" hint="Pay-asset units per whole unit held." error={fieldErrors.rate}>
             <input value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" className={`${inputClass} num`} required />
           </Field>
           <Field label="Paid in" hint="A watched asset on the same network. The same asset means paid in kind.">
@@ -97,7 +126,7 @@ function NewAction({ asset, assets, onDone }: { asset: AssetSummary; assets: Ass
               ))}
             </select>
           </Field>
-          <Field label="Paying agent address" hint="Empty counts mints of the pay asset.">
+          <Field label="Paying agent address" hint="Empty counts mints of the pay asset." error={fieldErrors.payer}>
             <input value={payer} onChange={(e) => setPayer(e.target.value)} className={`${inputClass} num`} spellCheck={false} />
           </Field>
         </div>
@@ -106,10 +135,11 @@ function NewAction({ asset, assets, onDone }: { asset: AssetSummary; assets: Ass
           <Field
             label={type === "split" ? "New units" : "Units redeemed"}
             hint={type === "split" ? "2 for 1 is new 2, old 1." : "1 of 1 redeems in full."}
+            error={fieldErrors.num}
           >
             <input value={num} onChange={(e) => setNum(e.target.value)} inputMode="numeric" className={`${inputClass} num`} required />
           </Field>
-          <Field label={type === "split" ? "Old units" : "Out of"}>
+          <Field label={type === "split" ? "Old units" : "Out of"} error={fieldErrors.den}>
             <input value={den} onChange={(e) => setDen(e.target.value)} inputMode="numeric" className={`${inputClass} num`} required />
           </Field>
         </div>
