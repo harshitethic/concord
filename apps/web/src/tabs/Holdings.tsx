@@ -33,10 +33,11 @@ export function Holdings({ asset }: { asset: AssetSummary }) {
           <input type="datetime-local" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={inputClass} />
         </Field>
       </div>
-      {error && <ErrorNote message={error} />}
+      {error && <ErrorNote message={data ? `Showing previously loaded holdings. ${error}` : error} />}
       {loading && !data && <Skeleton rows={8} />}
+      {loading && data && <p role="status" className="text-xs text-warn">Updating holdings for the selected as-of time. Previous figures are shown below.</p>}
       {data && (
-        <>
+        <div aria-busy={loading} className={loading ? "opacity-55" : undefined}>
           {data.incomplete.length > 0 && (
             <Notice>
               {data.incomplete.length} {data.incomplete.length === 1 ? "holder has" : "holders have"} a negative
@@ -89,7 +90,7 @@ export function Holdings({ asset }: { asset: AssetSummary }) {
               </table>
             </TableWrap>
           )}
-        </>
+        </div>
       )}
     </div>
   );
