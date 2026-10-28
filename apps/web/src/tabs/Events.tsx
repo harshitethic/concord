@@ -41,14 +41,14 @@ export function Events({ asset }: { asset: AssetSummary }) {
     const request = ++latest.current;
     setBusy(true);
     try {
-      const q = new URLSearchParams({ limit: String(PAGE) });
+      const q = new URLSearchParams({ limit: String(PAGE + 1) });
       if (kind) q.set("kind", kind);
       if (address) q.set("address", address);
       if (before) q.set("before", before);
       const page = await api<ChainEvent[]>(`/assets/${asset.id}/events?${q}`);
       if (request !== latest.current) return;
-      setRows((prev) => (before && prev ? [...prev, ...page] : page));
-      setMore(page.length === PAGE);
+      setRows((prev) => (before && prev ? [...prev, ...page.slice(0, PAGE)] : page.slice(0, PAGE)));
+      setMore(page.length > PAGE);
       setError(undefined);
       if (!before) setReadAt(asset.syncedLedger);
     } catch (e) {
