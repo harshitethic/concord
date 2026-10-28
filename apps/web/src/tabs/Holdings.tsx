@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Button } from "../ui";
+import { downloadCsv, holdingsCsvFilename, serializeHoldingsCsv } from "../csv";
 import { api, type AssetSummary, type Holdings as HoldingsData } from "../api";
 import {
   Addr,
@@ -37,6 +39,11 @@ export function Holdings({ asset }: { asset: AssetSummary }) {
       {loading && !data && <Skeleton rows={8} />}
       {data && (
         <>
+          <div>
+            <Button onClick={() => downloadCsv(serializeHoldingsCsv(data.holders), holdingsCsvFilename(asset.code, data.asOf))}>
+              Download current holdings CSV
+            </Button>
+          </div>
           {data.incomplete.length > 0 && (
             <Notice>
               {data.incomplete.length} {data.incomplete.length === 1 ? "holder has" : "holders have"} a negative
