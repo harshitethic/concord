@@ -1,5 +1,37 @@
 /** Minimal RFC 4180 reader and writer. Registers arrive as CSV exports from TA systems. */
-export function parseCsv(text: string): string[][] {
+/** Count UTF-8 bytes including four-byte scalar values and replacement surrogates. */
+function utf8Bytes(input: string): number {
+  let bytes = 0;
+  for (let i = 0; i < input.length; i++) {
+    const unit = input.charCodeAt(i);
+    if (unit <= 0x7f) bytes++;
+    else if (unit <= 0x7ff) bytes += 2;
+    else if (unit >= 0xd800 && unit <= 0xdbff &&
+      i + 1 < input.length && input.charCodeAt(i + 1) >= 0xdc00 && input.charCodeAt(i + 1) <= 0xdfff) {
+      bytes += 4;
+      i++;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+export interface CsvReadLimits { maxRows?: number; maxBytes?: number }
+/** Defaults match the HTTP upload ceiling and reject excessive parser work. */
+export const CSV_DEFAULT_MAX_ROWS = 100_000;
+export const CSV_DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
+
+export function parseCsv(text: string, limits: CsvReadLimits = {}): string[][] {
+  const maxRows = limits.maxRows ?? CSV_DEFAULT_MAX_ROWS;
+  const maxBytes = limits.maxBytes ?? CSV_DEFAULT_MAX_BYTES;
+  if (!Number.isSafeInteger(maxRows) || maxRows <= 0 || !Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw new Error("CSV row and byte limits must be positive integers");
+  }
+  if (utf8Bytes(text) > maxBytes) {
+    throw new Error(`file has more than ${maxBytes} bytes`);
+  }
+  const checkRows = (rows: string[][]): void => {
+    if (rows.length > maxRows) throw new Error(`file has more than ${maxRows} rows`);
+  };
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -38,6 +70,7 @@ export function parseCsv(text: string): string[][] {
       field = "";
       afterQuote = false;
       rows.push(row);
+      checkRows(rows);
       row = [];
     } else {
       field += c;
@@ -47,6 +80,7 @@ export function parseCsv(text: string): string[][] {
   if (field !== "" || row.length > 0) {
     row.push(field);
     rows.push(row);
+    checkRows(rows);
   }
   return rows.filter((r) => r.some((f) => f.trim() !== ""));
 }
@@ -57,8 +91,8 @@ export interface CsvTable {
 }
 
 /** Parse with a header row. Header names are lower-cased and spaces become underscores. */
-export function parseCsvTable(text: string): CsvTable {
-  const rows = parseCsv(text);
+export function parseCsvTable(text: string, limits: CsvReadLimits = {}): CsvTable {
+  const rows = parseCsv(text, limits);
   const head = rows[0];
   if (!head) throw new Error("empty CSV");
   const headers = head.map((h) => h.trim().toLowerCase().replace(/[\s-]+/g, "_"));

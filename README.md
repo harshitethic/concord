@@ -130,6 +130,10 @@ Architecture decisions: [`docs/adr/`](./docs/adr/README.md).
 - [`docs/demo-testnet.md`](./docs/demo-testnet.md): `pnpm demo:testnet` issues a practice asset on
   testnet and writes invented books for development, which disagree with the chain in known ways.
 
+## CSV import safety limits
+
+The core CSV reader stops at **100,000 rows (including the header)** or **10 MiB of UTF-8 text** by default. Clients using `parseCsv` or `parseCsvTable` may provide `{ maxRows, maxBytes }` to impose smaller or explicitly larger limits. Both must be positive integers. Limit errors name the exceeded threshold rather than attempting an unbounded parse.
+
 ## Contributing
 
 Contributions are welcome. Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md) for setup, the rules
