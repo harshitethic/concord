@@ -30,7 +30,19 @@ function nowLocal(): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
-function Imports({
+/** Preserve a successful journal import even if its follow-up reconciliation fails. */
+export async function importJournalAndMaybeReconcile(assetId: string, csv: string, rerun: boolean) {
+  const journal = await api<{ entries: number; issues: Issue[] }>(`/assets/${assetId}/journal`, { body: { csv } });
+  if (!rerun) return { journal };
+  try {
+    const run = await api<Run>(`/assets/${assetId}/reconciliations`, { body: {} });
+    return { journal, run };
+  } catch (error) {
+    return { journal, rerunError: (error as Error).message };
+  }
+}
+
+export function Imports({
   asset,
   hasRuns,
   onDone,
@@ -46,6 +58,8 @@ function Imports({
   const jr = useAction();
   const [journalNote, setJournalNote] = useState<string>();
   const [journalIssues, setJournalIssues] = useState<Issue[]>([]);
+  const [rerunAfterImport, setRerunAfterImport] = useState(hasRuns);
+  const [rerunError, setRerunError] = useState<string>();
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <form
@@ -82,15 +96,18 @@ function Imports({
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
+          setRerunError(undefined);
           void jr.run(async () => {
             const csv = await readFile(journal.current?.files?.[0]);
-            const out = await api<{ entries: number; issues: Issue[] }>(`/assets/${asset.id}/journal`, { body: { csv } });
-            setJournalIssues(out.issues);
+            const result = await importJournalAndMaybeReconcile(asset.id, csv, hasRuns && rerunAfterImport);
+            setJournalIssues(result.journal.issues);
             setJournalNote(
-              `${out.entries} ${out.entries === 1 ? "entry" : "entries"} loaded. ${
-                hasRuns ? "Re-run the reconciliation to match them against the chain." : "They are matched when a register is reconciled."
+              `${result.journal.entries} ${result.journal.entries === 1 ? "entry" : "entries"} loaded. ${
+                result.run ? "A new reconciliation was created." : "The journal import succeeded."
               }`,
             );
+            if (result.rerunError) setRerunError(`The journal was imported, but reconciliation failed: ${result.rerunError}`);
+            if (result.run) onDone(result.run.id);
           });
         }}
       >
@@ -101,7 +118,14 @@ function Imports({
           <input ref={journal} type="file" accept=".csv,text/csv" className={`${inputClass} py-1`} />
         </Field>
         <TemplateLink kind="journal" />
+        {hasRuns && (
+          <label className="flex items-center gap-2 text-[13px]">
+            <input type="checkbox" checked={rerunAfterImport} onChange={(e) => setRerunAfterImport(e.target.checked)} />
+            Re-run reconciliation after importing the journal
+          </label>
+        )}
         {jr.error && <ErrorNote message={jr.error} />}
+        {rerunError && <ErrorNote message={rerunError} />}
         {journalNote && (
           <p role="status" className="text-[13px] text-muted">
             {journalNote}
