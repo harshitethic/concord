@@ -1,3 +1,21 @@
+/** Detect a single unambiguous header separator, ignoring text inside quoted fields. */
+export function detectCsvDelimiter(text: string): "," | ";" | "\t" | "|" {
+  const counts: Record<string, number> = { ",": 0, ";": 0, "\t": 0, "|": 0 };
+  let quoted = false;
+  const src = text.replace(/^\uFEFF/, "");
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]!;
+    if (ch === '"') {
+      if (quoted && src[i + 1] === '"') { i++; continue; }
+      quoted = !quoted;
+    } else if (!quoted && (ch === "\r" || ch === "\n")) {
+      break;
+    } else if (!quoted && ch in counts) counts[ch]!++;
+  }
+  const matches = Object.entries(counts).filter(([, n]) => n > 0);
+  return matches.length === 1 ? matches[0]![0] as "," | ";" | "\t" | "|" : ",";
+}
+
 /** Minimal RFC 4180 reader and writer. Registers arrive as CSV exports from TA systems. */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -6,6 +24,7 @@ export function parseCsv(text: string): string[][] {
   let quoted = false;
   let afterQuote = false;
   const src = text.replace(/^﻿/, "");
+  const delimiter = detectCsvDelimiter(src);
   for (let i = 0; i < src.length; i++) {
     const c = src[i]!;
     if (quoted) {
@@ -22,13 +41,13 @@ export function parseCsv(text: string): string[][] {
       }
     } else if (afterQuote && (c === " " || c === "\t")) {
       // Ignore optional spaces after a closed quoted field.
-    } else if (afterQuote && c !== "," && c !== "\n" && c !== "\r") {
+    } else if (afterQuote && c !== delimiter && c !== "\n" && c !== "\r") {
       const lines = src.slice(0, i).split(/\r\n|\r|\n/);
       const column = lines[lines.length - 1]!.length + 1;
       throw new Error("unexpected character after closing quote at line " + lines.length + ", column " + column);
     } else if (c === '"' && field === "") {
       quoted = true;
-    } else if (c === ",") {
+    } else if (c === delimiter) {
       row.push(field);
       field = "";
       afterQuote = false;
@@ -98,7 +117,7 @@ function escape(value: unknown): string {
   } else {
     s = String(value);
   }
-  return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+  return /[",;|\t\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 }
 
 export function toCsv(headers: string[], rows: Array<Record<string, unknown>>): string {
