@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { api, type AssetSummary, type Holdings as HoldingsData } from "../api";
+import { downloadHoldingsCsv } from "../csv";
 import {
   Addr,
   Badge,
+  Button,
   Empty,
   ErrorNote,
   Field,
@@ -28,10 +30,15 @@ export function Holdings({ asset }: { asset: AssetSummary }) {
   );
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="max-w-xs">
         <Field label="As of" hint={`Empty shows the latest indexed ledger. ${LOCAL_TIME_HINT}`}>
           <input type="datetime-local" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={inputClass} />
         </Field>
+      </div>
+      <Button disabled={!data || loading} onClick={() => data && downloadHoldingsCsv(data.holders, data.asOf, asset.code)}>
+        Download this view as CSV
+      </Button>
       </div>
       {error && <ErrorNote message={error} />}
       {loading && !data && <Skeleton rows={8} />}
