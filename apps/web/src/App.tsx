@@ -1,6 +1,6 @@
 import { ArrowsClockwise, GearSix, SignOut } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { api, type AssetSummary, type Network, type Overview as OverviewData } from "./api";
+import { api, WORKSPACE_MISMATCH, type AssetSummary, type Network, type Overview as OverviewData } from "./api";
 import { EphemeralNotice, Invite, Reset, SignIn, SignUp, googleError } from "./Auth";
 import { Overview } from "./Overview";
 import { Settings } from "./Settings";
@@ -303,9 +303,16 @@ function Shell({ route }: { route: Route }) {
   const [data, setData] = useState<OverviewData>();
   const [error, setError] = useState<string>();
   const [tick, setTick] = useState(0);
+  const [workspaceMismatch, setWorkspaceMismatch] = useState(false);
+  useEffect(() => {
+    const onMismatch = () => setWorkspaceMismatch(true);
+    window.addEventListener(WORKSPACE_MISMATCH, onMismatch);
+    return () => window.removeEventListener(WORKSPACE_MISMATCH, onMismatch);
+  }, []);
   const reload = () => setTick((t) => t + 1);
 
   useEffect(() => {
+    if (workspaceMismatch) return;
     let live = true;
     api<OverviewData>("/overview")
       .then((d) => {
@@ -317,15 +324,16 @@ function Shell({ route }: { route: Route }) {
     return () => {
       live = false;
     };
-  }, [tick]);
+  }, [tick, workspaceMismatch]);
 
   // The server indexes in the background; keep the figures current without a manual refresh,
   // and look more often while an asset is still being read for the first time.
   const settling = data?.assets.some((a) => a.state === "indexing") ?? false;
   useEffect(() => {
+    if (workspaceMismatch) return;
     const id = setInterval(reload, settling ? 4_000 : 30_000);
     return () => clearInterval(id);
-  }, [settling]);
+  }, [settling, workspaceMismatch]);
 
   // After signing in, the address still names the sign-in page.
   useEffect(() => {
@@ -343,6 +351,18 @@ function Shell({ route }: { route: Route }) {
     key === "reconciliation" ? a.openBreaks.reconciliation : key === "controls" ? a.openBreaks.controls : key === "actions" ? a.openBreaks.actions : 0;
   const link = (active: boolean) =>
     `whitespace-nowrap rounded px-2 py-1.5 text-[13px] transition-colors duration-150 ${active ? "bg-sunken font-medium" : "text-muted hover:bg-sunken hover:text-text"}`;
+
+  if (workspaceMismatch) {
+    return (
+      <main id="main" role="alert" className="mx-auto flex min-h-[100dvh] max-w-xl flex-col items-start justify-center gap-4 px-6">
+        <h1 className="text-xl font-semibold">This tab is showing a different workspace</h1>
+        <p className="text-[13px] text-muted">
+          Your active workspace changed in another tab. Reload to show the current workspace before making any changes.
+        </p>
+        <Button variant="primary" onClick={() => location.reload()}>Reload Concord</Button>
+      </main>
+    );
+  }
 
   return (
     <NetworkContext.Provider value={asset?.network ?? network}>

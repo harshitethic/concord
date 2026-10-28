@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, UNAUTHORIZED, api } from "./api";
+import { ApiError, UNAUTHORIZED, WORKSPACE_MISMATCH, api } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -61,5 +61,42 @@ describe("offline API failures", () => {
 
     expect(unauthorized).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe("stale workspace protection", () => {
+  it("broadcasts the exact workspace-conflict 409 with its typed status", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(
+      { error: "This tab is showing a different workspace. Reload it." }, { status: 409 },
+    )));
+    const onMismatch = vi.fn();
+    const onUnauthorized = vi.fn();
+    window.addEventListener(WORKSPACE_MISMATCH, onMismatch);
+    window.addEventListener(UNAUTHORIZED, onUnauthorized);
+    try {
+      await expect(api("/overview")).rejects.toEqual(
+        new ApiError("This tab is showing a different workspace. Reload it.", 409),
+      );
+      expect(onMismatch).toHaveBeenCalledOnce();
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(WORKSPACE_MISMATCH, onMismatch);
+      window.removeEventListener(UNAUTHORIZED, onUnauthorized);
+    }
+  });
+
+  it("does not lock the UI on unrelated conflicts or HTTP failures", async () => {
+    const onMismatch = vi.fn();
+    window.addEventListener(WORKSPACE_MISMATCH, onMismatch);
+    try {
+      for (const status of [403, 409, 500]) {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ error: "Other failure" }, { status })));
+        await expect(api("/register")).rejects.toMatchObject({ status, message: "Other failure" });
+      }
+      expect(onMismatch).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(WORKSPACE_MISMATCH, onMismatch);
+    }
   });
 });

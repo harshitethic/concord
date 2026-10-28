@@ -16,6 +16,8 @@ export function showOrg(orgId: string | undefined): void {
 
 /** Raised when the server no longer recognises the session, wherever the call came from. */
 export const UNAUTHORIZED = "concord:unauthorized";
+/** Emitted when another tab switches workspaces while this one is still showing its old books. */
+export const WORKSPACE_MISMATCH = "concord:workspace-mismatch";
 
 function headers(json: boolean): HeadersInit {
   const h: Record<string, string> = {};
@@ -30,6 +32,9 @@ async function failure(res: Response, fallback: string, path: string): Promise<A
   const sessionEndpoint = path === "/auth/me" || path === "/auth/session";
   const protectedEndpoint = !path.startsWith("/auth/") || sessionEndpoint;
   if (res.status === 401 && protectedEndpoint) window.dispatchEvent(new Event(UNAUTHORIZED));
+  if (res.status === 409 && detail?.error === "This tab is showing a different workspace. Reload it.") {
+    window.dispatchEvent(new Event(WORKSPACE_MISMATCH));
+  }
   return new ApiError(detail?.error ?? `${fallback} (${res.status})`, res.status);
 }
 
