@@ -49,12 +49,20 @@ export function parseRatio(input: string): Ratio {
   return { num: BigInt(whole + frac), den: 10n ** BigInt(frac.length) };
 }
 
-export type Rounding = "floor" | "half-up";
+export type Rounding = "floor" | "half-up" | "ceil" | "half-even";
 
 /** value * num / den for non-negative operands, with an explicit rounding rule. */
 export function mulDiv(value: bigint, num: bigint, den: bigint, rounding: Rounding = "floor"): bigint {
   if (den <= 0n) throw new Error("denominator must be positive");
   if (value < 0n || num < 0n) throw new Error("mulDiv expects non-negative operands");
   const product = value * num;
-  return rounding === "half-up" ? (product * 2n + den) / (den * 2n) : product / den;
+  const quotient = product / den;
+  const remainder = product % den;
+  if (rounding === "ceil") return quotient + (remainder > 0n ? 1n : 0n);
+  if (rounding === "half-up") return quotient + (remainder * 2n >= den ? 1n : 0n);
+  if (rounding === "half-even") {
+    const twice = remainder * 2n;
+    return quotient + (twice > den || (twice === den && quotient % 2n === 1n) ? 1n : 0n);
+  }
+  return quotient;
 }
