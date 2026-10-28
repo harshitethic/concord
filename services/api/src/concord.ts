@@ -7,6 +7,7 @@ import {
   parseInstructionsCsv,
   parseJournalCsv,
   parseRegisterCsv,
+  parseRatio,
   reconcileDistribution,
   reconcileMovements,
   reconcilePositions,
@@ -1269,6 +1270,7 @@ export class Concord {
       if (!input.ratePerUnit || !/^\d+(\.\d+)?$/.test(input.ratePerUnit)) {
         throw new Invalid("dividend needs ratePerUnit as a decimal");
       }
+      if (parseRatio(input.ratePerUnit).num === 0n) throw new Invalid("ratePerUnit must be greater than zero");
       params.ratePerUnit = input.ratePerUnit;
       const pay = input.payAsset ? this.asset(String(input.payAsset)) : asset;
       if (pay.network !== asset.network) throw new Invalid("the pay asset must be on the same network");

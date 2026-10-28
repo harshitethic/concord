@@ -213,6 +213,15 @@ describe("Concord", () => {
     chain.push(assetId, "clawback", 30, { from: h2, amount: u(5) });
   });
 
+  it("rejects zero dividend rates and accepts a positive tiny decimal", async () => {
+    for (const rate of ["0", "0.0", "00", "0.000"]) {
+      await expect(concord.createAction("FUND", { type: "dividend", recordTime: at(5), ratePerUnit: rate }))
+        .rejects.toThrow("ratePerUnit must be greater than zero");
+    }
+    await expect(concord.createAction("FUND", { type: "dividend", recordTime: at(5), ratePerUnit: "0.0000001" }))
+      .resolves.toMatchObject({ type: "dividend" });
+  });
+
   it("indexes in pages and is idempotent", async () => {
     for (let i = 0; i < 2500; i++) chain.push(assetId, "mint", 40, { to: h3, amount: 1n });
     expect(await concord.sync("FUND")).toEqual({ added: 2507 });
