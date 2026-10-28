@@ -40,6 +40,7 @@ Everything to date; Concord's history begins 2026-10 with the commits below.
 
 ### Added
 
+- Print-friendly audit views reveal full addresses, repeat table headers and remain readable in dark mode (#832).
 - CSV templates can include one illustrative example row with `?example=1` or `?example=true` (#200).
 - The accounting core (`feat(core)`, `c402eae`): holdings replay from CAP-67 events, position
   and movement reconciliation with typed breaks, corporate-action entitlements (dividend,
