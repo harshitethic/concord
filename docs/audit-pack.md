@@ -160,3 +160,7 @@ Discrepancies collected from three places, in this order: reconciliation runs in
 | `noteAuthor`    | Who signed the note                                                                                                                                                                                                                                                                                                                                                                          |
 
 _Source: `services/api/src/concord.ts` (`exportCsv`, `reconcile` and `annotate`), `packages/core/src/{reconcile,movements,distributions,controls}.ts`._
+
+## Printing the current audit view
+
+The Reconciliation, Controls and Holdings tabs can be printed or saved as PDF from the browser's Print command. The print layout omits navigation and interactive controls, uses black text on white paper even in dark mode, keeps individual table rows together, repeats table headers across pages, and displays complete account addresses instead of abbreviated copies. It prints the **currently selected tab and filters**, not all sections of the export pack; use the JSON/CSV pack for the complete audit record.

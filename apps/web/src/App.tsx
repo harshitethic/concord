@@ -349,7 +349,7 @@ function Shell({ route }: { route: Route }) {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-10 focus:rounded focus:bg-surface focus:px-3 focus:py-2">
         Skip to content
       </a>
-      <div className="mx-auto grid min-h-[100dvh] max-w-[1400px] grid-cols-1 md:grid-cols-[232px_1fr]">
+      <div className="print-shell mx-auto grid min-h-[100dvh] max-w-[1400px] grid-cols-1 md:grid-cols-[232px_1fr]">
         <aside className="flex flex-col gap-4 border-b border-line px-4 py-4 md:border-b-0 md:border-r md:py-6">
           <div className="flex items-center justify-between gap-2">
             <a href="#/" className="text-base font-semibold tracking-tight">

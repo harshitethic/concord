@@ -235,6 +235,7 @@ export function Addr({ value }: { value: string | null | undefined }) {
           <Copy size={12} className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
         )}
       </button>
+      <span className="print-full-address num break-all">{value}</span>
       {/^[GC][A-Z2-7]{55}$/.test(value) && (
         <a
           href={`${explorer(network)}/${kind}/${value}`}
