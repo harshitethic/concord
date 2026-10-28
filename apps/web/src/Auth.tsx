@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, type Me } from "./api";
 import { useSession } from "./session";
+import { buildDocumentTitle, useDocumentTitle } from "./title";
 import { Button, ErrorNote, Field, LinkButton, Notice, Skeleton, inputClass, useAction, useLoad } from "./ui";
 
 const PASSWORD_MIN = 10;
@@ -32,6 +33,7 @@ export function EphemeralNotice() {
 }
 
 function Frame({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
+  useDocumentTitle(buildDocumentTitle(title));
   return (
     <div className="mx-auto grid min-h-[100dvh] max-w-[1080px] grid-cols-1 content-start gap-x-16 gap-y-12 px-4 py-10 md:grid-cols-[minmax(0,380px)_1fr] md:py-20">
       <main id="main" className="flex flex-col gap-6">

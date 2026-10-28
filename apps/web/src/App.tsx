@@ -6,6 +6,7 @@ import { Overview } from "./Overview";
 import { Settings } from "./Settings";
 import { SessionProvider, useMe, useSession } from "./session";
 import { focusRouteContent } from "./navigationFocus";
+import { buildDocumentTitle, useDocumentTitle } from "./title";
 import { Actions } from "./tabs/Actions";
 import { Controls } from "./tabs/Controls";
 import { Events } from "./tabs/Events";
@@ -333,6 +334,13 @@ function Shell({ route }: { route: Route }) {
   }, [route.page]);
 
   const asset = data?.assets.find((a) => a.id === route.assetId);
+  const section = route.page === "settings" ? "Settings" : route.page === "asset"
+    ? (asset ? TABS.find(([key]) => key === route.tab)?.[1] ?? "Reconciliation" : "Asset not found")
+    : "All assets";
+  const openBreaks = asset
+    ? asset.openBreaks.reconciliation + asset.openBreaks.controls + asset.openBreaks.actions
+    : 0;
+  useDocumentTitle(buildDocumentTitle(section, asset?.code, openBreaks));
   // A link to an asset on the other network brings the switcher with it.
   useEffect(() => {
     if (asset && asset.network !== network) setNetwork(asset.network);
@@ -471,6 +479,7 @@ function Shell({ route }: { route: Route }) {
 }
 
 function Boot({ error }: { error?: string | undefined }) {
+  useDocumentTitle("Concord");
   return (
     <div className="mx-auto flex max-w-sm flex-col gap-4 px-4 pt-24">
       <p className="text-base font-semibold tracking-tight">Concord</p>
