@@ -213,6 +213,15 @@ describe("Concord", () => {
     chain.push(assetId, "clawback", 30, { from: h2, amount: u(5) });
   });
 
+  it("rejects execution windows that end before or exactly at the record time", async () => {
+    for (const until of [at(1), at(5)]) {
+      await expect(concord.createAction("FUND", { type: "dividend", recordTime: at(5), windowTo: until, ratePerUnit: "0.1" }))
+        .rejects.toThrow("windowTo must be after recordTime");
+    }
+    await expect(concord.createAction("FUND", { type: "dividend", recordTime: at(5), windowTo: at(6), ratePerUnit: "0.1" }))
+      .resolves.toMatchObject({ type: "dividend" });
+  });
+
   it("indexes in pages and is idempotent", async () => {
     for (let i = 0; i < 2500; i++) chain.push(assetId, "mint", 40, { to: h3, amount: 1n });
     expect(await concord.sync("FUND")).toEqual({ added: 2507 });

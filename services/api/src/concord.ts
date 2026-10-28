@@ -1264,7 +1264,11 @@ export class Concord {
     const asset = this.asset(ref);
     const recordTime = isoTime(String(input.recordTime ?? ""), "recordTime");
     const params: Record<string, unknown> = { exclude: addresses(input.exclude, "exclude") };
-    if (input.windowTo) params.windowTo = isoTime(input.windowTo, "windowTo");
+    if (input.windowTo) {
+      const windowTo = isoTime(input.windowTo, "windowTo");
+      if (windowTo <= recordTime) throw new Invalid("windowTo must be after recordTime");
+      params.windowTo = windowTo;
+    }
     if (input.type === "dividend") {
       if (!input.ratePerUnit || !/^\d+(\.\d+)?$/.test(input.ratePerUnit)) {
         throw new Invalid("dividend needs ratePerUnit as a decimal");
