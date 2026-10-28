@@ -303,17 +303,37 @@ function Shell({ route }: { route: Route }) {
   const [data, setData] = useState<OverviewData>();
   const [error, setError] = useState<string>();
   const [tick, setTick] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number>();
+  const [failedPolls, setFailedPolls] = useState(0);
+  const [clock, setClock] = useState(Date.now());
   const reload = () => setTick((t) => t + 1);
+  useEffect(() => {
+    const id = setInterval(() => setClock(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let live = true;
+    setRefreshing(true);
     api<OverviewData>("/overview")
       .then((d) => {
         if (!live) return;
+        const now = Date.now();
         setData(d);
+        setLastUpdatedAt(now);
+        setClock(now);
+        setFailedPolls(0);
         setError(undefined);
       })
-      .catch((e: Error) => live && setError(e.message));
+      .catch((e: Error) => {
+        if (!live) return;
+        setFailedPolls((count) => count + 1);
+        setError(e.message);
+      })
+      .finally(() => {
+        if (live) setRefreshing(false);
+      });
     return () => {
       live = false;
     };
@@ -366,6 +386,15 @@ function Shell({ route }: { route: Route }) {
                 }}
               />
             )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted" aria-live="polite">
+            <span>{lastUpdatedAt === undefined
+              ? "Not updated yet"
+              : `Updated ${Math.floor(Math.max(0, clock - lastUpdatedAt) / 1000)}s ago`}</span>
+            {failedPolls >= 2 && <Badge tone="warn">Updates delayed</Badge>}
+            <Button onClick={reload} busy={refreshing} className="ml-auto">
+              <ArrowsClockwise size={14} /> Refresh
+            </Button>
           </div>
           <nav aria-label="Assets" className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
             <a href="#/" aria-current={route.page === "home" ? "page" : undefined} className={link(route.page === "home")}>
