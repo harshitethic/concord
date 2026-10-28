@@ -1,5 +1,5 @@
 import { WarningList } from "../WarningList";
-import { useState } from "react";
+import { useState, type ReactNode, Fragment } from "react";
 import { api, type Action, type AssetSummary } from "../api";
 import { BreakTable } from "../breaks";
 import {
@@ -127,6 +127,33 @@ function NewAction({ asset, assets, onDone }: { asset: AssetSummary; assets: Ass
   );
 }
 
+/** Render only known persisted terms: unsupported keys must never leak into the audit view. */
+export function ActionTerms({ action }: { action: Action }) {
+  const params = action.params;
+  const str = (name: string): string | undefined => typeof params[name] === "string" ? params[name] as string : undefined;
+  const excluded = Array.isArray(params.exclude) ? params.exclude.filter((value): value is string => typeof value === "string") : [];
+  const fields: Array<{ label: string; content: ReactNode }> = [];
+  if (action.type === "dividend") {
+    if (str("ratePerUnit")) fields.push({ label: "Rate per unit", content: str("ratePerUnit") });
+    if (str("payAsset")) fields.push({ label: "Payment asset", content: str("payAsset") });
+    if (str("rounding")) fields.push({ label: "Rounding", content: str("rounding") });
+    if (str("payer")) fields.push({ label: "Paying agent", content: <Addr value={str("payer")} /> });
+  } else {
+    if (str("num") && str("den")) fields.push({ label: action.type === "split" ? "Split ratio" : "Redemption fraction", content: `${str("num")}:${str("den")}` });
+  }
+  if (str("windowTo")) fields.push({ label: "Execution window ends", content: when(str("windowTo")) });
+  if (excluded.length > 0) fields.push({ label: "Excluded addresses", content: <span className="flex flex-wrap gap-2">{excluded.map((value, i) => <Addr key={`${value}-${i}`} value={value} />)}</span> });
+  if (fields.length === 0) return null;
+  return (
+    <section aria-label="Action terms" className="rounded border border-line bg-surface p-4">
+      <h4 className="mb-3 font-semibold">Action terms</h4>
+      <dl className="grid gap-x-4 gap-y-2 text-[13px] sm:grid-cols-[190px_1fr]">
+        {fields.map((field) => <Fragment key={field.label}><dt className="text-muted">{field.label}</dt><dd>{field.content}</dd></Fragment>)}
+      </dl>
+    </section>
+  );
+}
+
 function Detail({ asset, action, onChange }: { asset: AssetSummary; action: Action; onChange: () => void }) {
   const { busy, error, run } = useAction();
   const res = action.result;
@@ -153,6 +180,7 @@ function Detail({ asset, action, onChange }: { asset: AssetSummary; action: Acti
         </Button>
       </div>
       {error && <ErrorNote message={error} />}
+      <ActionTerms action={action} />
       {action.state === "scheduled" && (
         <Notice>
           The indexed chain has not reached the record time yet. Concord takes the snapshot and reconciles this action
