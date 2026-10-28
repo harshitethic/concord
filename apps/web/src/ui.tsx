@@ -212,7 +212,7 @@ export function Addr({ value }: { value: string | null | undefined }) {
   if (!value) return <span className="text-muted">none</span>;
   const kind = value.startsWith("C") ? "contract" : "account";
   return (
-    <span className="group inline-flex items-center gap-1">
+    <span className="group inline-flex items-center gap-1 print-address">
       <button
         type="button"
         title={`${value} (click to copy)`}
@@ -228,7 +228,8 @@ export function Addr({ value }: { value: string | null | undefined }) {
         }}
         className="num inline-flex items-center gap-1 rounded hover:text-accent"
       >
-        {short(value)}
+        <span className="print:hidden">{short(value)}</span>
+        <span className="hidden break-all print:inline">{value}</span>
         {copied ? (
           <Check size={12} />
         ) : (

@@ -131,3 +131,37 @@ body {
     opacity: 0.5;
   }
 }
+
+/* Audit-friendly output for browser printing and Save as PDF. */
+@media print {
+  :root, :root[data-theme="dark"] {
+    color-scheme: light;
+    --bg: #fff;
+    --surface: #fff;
+    --sunken: #fff;
+    --text: #111;
+    --muted: #333;
+    --line: #ccc;
+    --line-strong: #999;
+    --accent: #111;
+    --bad: #700;
+    --bad-bg: #fff;
+    --ok: #075;
+    --ok-bg: #fff;
+    --warn: #640;
+    --warn-bg: #fff;
+  }
+  body { background: white !important; color: black !important; font-size: 10pt; }
+  aside, nav, button, [role="navigation"], [data-print-hide] { display: none !important; }
+  main, [role="main"], table, .tbl, .overflow-x-auto, .overflow-auto { overflow: visible !important; max-width: none !important; }
+  .grid { display: block !important; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, td, th { break-inside: avoid; page-break-inside: avoid; }
+  section, article { break-inside: avoid-page; }
+  .print-address { white-space: normal; overflow-wrap: anywhere; }
+  .truncate { text-overflow: clip !important; white-space: normal !important; overflow: visible !important; }
+  a { color: #111 !important; text-decoration: none !important; }
+  @page { margin: 15mm; }
+}
