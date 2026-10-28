@@ -195,8 +195,62 @@ function WatchForm({ network, onDone }: { network: Network; onDone: (id: string)
   );
 }
 
+type AssetSort = "breaks" | "indexed" | "units";
+type SortDirection = "asc" | "desc";
+
+function openBreaks(asset: AssetSummary): number {
+  return asset.openBreaks.reconciliation + asset.openBreaks.controls + asset.openBreaks.actions;
+}
+
+/** Compare decimal quantities exactly, including supplies larger than Number.MAX_SAFE_INTEGER. */
+function compareUnits(a: string, b: string): number {
+  const parts = (v: string) => {
+    const negative = v.startsWith("-");
+    const [whole = "0", fraction = ""] = (negative ? v.slice(1) : v).split(".");
+    return { negative, whole: whole.replace(/^0+(?=\d)/, ""), fraction: fraction.replace(/0+$/, "") };
+  };
+  const x = parts(a);
+  const y = parts(b);
+  if (x.negative !== y.negative) return x.negative ? -1 : 1;
+  const sign = x.negative ? -1 : 1;
+  if (x.whole.length !== y.whole.length) return Math.sign(x.whole.length - y.whole.length) * sign;
+  if (x.whole !== y.whole) return (x.whole < y.whole ? -1 : 1) * sign;
+  const length = Math.max(x.fraction.length, y.fraction.length);
+  const xf = x.fraction.padEnd(length, "0");
+  const yf = y.fraction.padEnd(length, "0");
+  return (xf === yf ? 0 : xf < yf ? -1 : 1) * sign;
+}
+
+/** Stable sort: a refresh with new object instances must not reshuffle equal items. */
+export function visibleAssets(assets: AssetSummary[], query: string, attention: boolean, sort: AssetSort, direction: SortDirection): AssetSummary[] {
+  const term = query.trim().toLocaleLowerCase();
+  return assets
+    .map((asset, index) => ({ asset, index }))
+    .filter(({ asset }) => (!term || `${asset.name} ${asset.code}`.toLocaleLowerCase().includes(term)) &&
+      (!attention || Boolean(asset.syncError) || openBreaks(asset) > 0))
+    .sort((a, b) => {
+      const x = a.asset;
+      const y = b.asset;
+      let diff = 0;
+      if (sort === "breaks") diff = openBreaks(x) - openBreaks(y);
+      else if (sort === "units") diff = compareUnits(x.supply, y.supply);
+      else diff = (x.syncedAt ?? "").localeCompare(y.syncedAt ?? "");
+      return (direction === "asc" ? diff : -diff) || a.index - b.index;
+    })
+    .map(({ asset }) => asset);
+}
+
 export function Overview({ assets, network, onChange }: { assets: AssetSummary[]; network: Network; onChange: () => void }) {
   const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
+  const [attention, setAttention] = useState(false);
+  const [sort, setSort] = useState<AssetSort>("breaks");
+  const [direction, setDirection] = useState<SortDirection>("desc");
+  const filtered = visibleAssets(assets, query, attention, sort, direction);
+  const changeSort = (key: AssetSort) => {
+    if (key === sort) setDirection((current) => current === "asc" ? "desc" : "asc");
+    else { setSort(key); setDirection("desc"); }
+  };
   return (
     <div className="flex flex-col gap-8">
       <Section
@@ -226,21 +280,40 @@ export function Overview({ assets, network, onChange }: { assets: AssetSummary[]
           </Empty>
         ) : (
           assets.length > 0 && (
-            <TableWrap>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex min-w-[190px] flex-1 flex-col gap-1 text-[13px]">
+                  <span>Filter assets by name or code</span>
+                  <input className={inputClass} value={query} onChange={(e) => setQuery(e.target.value)} />
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                  <input type="checkbox" checked={attention} onChange={(e) => setAttention(e.target.checked)} />
+                  Needs attention
+                </label>
+              </div>
+              {filtered.length === 0 ? (
+                <p role="status" className="text-[13px] text-muted">No assets match these filters.</p>
+              ) : <TableWrap>
               <table className="tbl">
                 <thead>
                   <tr>
                     <th>Asset</th>
-                    <th className="r">Units outstanding</th>
+                    <th className="r" aria-sort={sort === "units" ? direction === "asc" ? "ascending" : "descending" : "none"}>
+                      <button type="button" onClick={() => changeSort("units")}>Units outstanding</button>
+                    </th>
                     <th className="r">Holders</th>
-                    <th>Indexed to</th>
+                    <th aria-sort={sort === "indexed" ? direction === "asc" ? "ascending" : "descending" : "none"}>
+                      <button type="button" onClick={() => changeSort("indexed")}>Indexed to</button>
+                    </th>
                     <th>Last reconciliation</th>
-                    <th className="r">Open breaks</th>
+                    <th className="r" aria-sort={sort === "breaks" ? direction === "asc" ? "ascending" : "descending" : "none"}>
+                      <button type="button" onClick={() => changeSort("breaks")}>Open breaks</button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {assets.map((a) => {
-                    const open = a.openBreaks.reconciliation + a.openBreaks.controls + a.openBreaks.actions;
+                  {filtered.map((a) => {
+                    const open = openBreaks(a);
                     const indexing = a.state === "indexing";
                     return (
                       <tr key={a.id}>
@@ -274,7 +347,8 @@ export function Overview({ assets, network, onChange }: { assets: AssetSummary[]
                   })}
                 </tbody>
               </table>
-            </TableWrap>
+              </TableWrap>}
+            </div>
           )
         )}
       </Section>
