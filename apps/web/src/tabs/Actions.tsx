@@ -127,6 +127,38 @@ function NewAction({ asset, assets, onDone }: { asset: AssetSummary; assets: Ass
   );
 }
 
+/** Render only the persisted terms the action engine understands, never arbitrary params. */
+export function ActionTerms({ action, asset }: { action: Action; asset: AssetSummary }) {
+  const p = action.params;
+  const text = (key: string): string | undefined => typeof p[key] === "string" ? p[key] as string : undefined;
+  const exclusions = Array.isArray(p.exclude) ? p.exclude.filter((v): v is string => typeof v === "string") : [];
+  const payAsset = text("payAsset");
+  const payCode = payAsset === asset.id ? asset.code : action.result?.flowAsset.code ?? payAsset;
+  return (
+    <section aria-label="Action terms" className="rounded border border-line bg-surface p-4">
+      <h4 className="mb-3 font-medium">Action terms</h4>
+      <dl className="grid grid-cols-[minmax(115px,auto)_1fr] gap-x-4 gap-y-2 text-[13px]">
+        {action.type === "dividend" && (
+          <>
+            {text("ratePerUnit") && <><dt className="text-muted">Rate per unit</dt><dd className="num">{text("ratePerUnit")}</dd></>}
+            {text("rounding") && <><dt className="text-muted">Rounding</dt><dd>{text("rounding")}</dd></>}
+            {payCode && <><dt className="text-muted">Pay asset</dt><dd>{payCode}</dd></>}
+            {text("payer") && <><dt className="text-muted">Paying agent</dt><dd><Addr value={text("payer")!} /></dd></>}
+          </>
+        )}
+        {action.type !== "dividend" && text("num") && text("den") && (
+          <><dt className="text-muted">{action.type === "split" ? "Split ratio" : "Redemption ratio"}</dt><dd className="num">{text("num")} / {text("den")}</dd></>
+        )}
+        {text("windowTo") && <><dt className="text-muted">Window ends</dt><dd>{when(text("windowTo"))}</dd></>}
+        {exclusions.length > 0 && <>
+          <dt className="text-muted">Excluded addresses</dt>
+          <dd className="flex flex-col gap-1">{exclusions.map((addr) => <Addr key={addr} value={addr} />)}</dd>
+        </>}
+      </dl>
+    </section>
+  );
+}
+
 function Detail({ asset, action, onChange }: { asset: AssetSummary; action: Action; onChange: () => void }) {
   const { busy, error, run } = useAction();
   const res = action.result;
@@ -153,6 +185,7 @@ function Detail({ asset, action, onChange }: { asset: AssetSummary; action: Acti
         </Button>
       </div>
       {error && <ErrorNote message={error} />}
+      <ActionTerms action={action} asset={asset} />
       {action.state === "scheduled" && (
         <Notice>
           The indexed chain has not reached the record time yet. Concord takes the snapshot and reconciles this action
