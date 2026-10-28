@@ -8,8 +8,29 @@ const PLAIN = /^-?\d+(\.\d+)?$/;
  * Parse a decimal string into the smallest unit. Throws rather than rounding: a register that
  * carries more precision than the chain can represent is itself a reconciliation problem.
  */
-export function parseUnits(input: string, decimals = DEFAULT_DECIMALS): bigint {
+/** Expand Excel-style scientific notation without ever converting through floating point. */
+export function expandScientificUnits(input: string): string {
+  const match = /^(-?)(\d+(?:\.\d+)?)[eE]([+-]?\d+)$/.exec(input.trim());
+  if (!match) throw new Error(`not a scientific decimal: "${input}"`);
+  const exponent = Number(match[3]);
+  if (!Number.isInteger(exponent) || Math.abs(exponent) > 1000) {
+    throw new Error("scientific exponent exceeds the supported range");
+  }
+  const [whole, fraction = ""] = match[2]!.split(".");
+  const digits = whole! + fraction;
+  const shift = whole!.length + exponent;
+  let decimal: string;
+  if (shift <= 0) decimal = "0." + "0".repeat(-shift) + digits;
+  else if (shift >= digits.length) decimal = digits + "0".repeat(shift - digits.length);
+  else decimal = digits.slice(0, shift) + "." + digits.slice(shift);
+  return match[1] + decimal;
+}
+
+export function parseUnits(input: string, decimals = DEFAULT_DECIMALS, options: { lenient?: boolean } = {}): bigint {
   let s = input.trim();
+  if (options.lenient && /^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(s)) {
+    s = expandScientificUnits(s.startsWith("+") ? s.slice(1) : s);
+  }
   if (GROUPED.test(s)) s = s.replaceAll(",", "");
   if (!PLAIN.test(s)) throw new Error(`not a decimal amount: "${input}"`);
   const negative = s.startsWith("-");
