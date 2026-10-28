@@ -4,6 +4,7 @@ import { useSession } from "./session";
 import { Button, ErrorNote, Field, LinkButton, Notice, Skeleton, inputClass, useAction, useLoad } from "./ui";
 
 const PASSWORD_MIN = 10;
+const PASSWORD_MAX = 200;
 
 /** What the server reports back in the address bar when Google sign-in does not go through. */
 const GOOGLE_ERRORS: Record<string, string> = {
@@ -102,6 +103,7 @@ function Password({
           onChange={(e) => onChange(e.target.value)}
           autoComplete={fresh ? "new-password" : "current-password"}
           minLength={fresh ? PASSWORD_MIN : undefined}
+          maxLength={fresh ? PASSWORD_MAX : undefined}
           className={inputClass}
           required
         />

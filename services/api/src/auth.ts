@@ -68,8 +68,11 @@ function cleanName(input: unknown, what: string, max = 80): string {
 }
 
 function checkPassword(input: unknown, email?: string): string {
-  if (typeof input !== "string" || input.length < PASSWORD_MIN || input.length > PASSWORD_MAX) {
+  if (typeof input !== "string" || input.length < PASSWORD_MIN) {
     throw new Rejected(`A password needs at least ${PASSWORD_MIN} characters.`);
+  }
+  if (input.length > PASSWORD_MAX) {
+    throw new Rejected(`A password must be at most ${PASSWORD_MAX} characters.`);
   }
   if (email && input.toLowerCase() === email) throw new Rejected("Choose a password that is not your email address.");
   return input;

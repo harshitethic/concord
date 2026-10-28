@@ -1446,3 +1446,17 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+
+describe("password length validation", () => {
+  it("rejects overlong signup passwords with the correct maximum, without creating an account", async () => {
+    const h = harness();
+    const res = await h.app.request("/api/auth/signup", { method: "POST", headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ email: "long@example.test", name: "Long", orgName: "Org", password: "x".repeat(201) }) });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/at most 200 characters/);
+    const good = await h.app.request("/api/auth/signup", { method: "POST", headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ email: "long@example.test", name: "Long", orgName: "Org", password: "x".repeat(200) }) });
+    expect(good.status).toBe(201);
+  });
+});
