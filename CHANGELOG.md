@@ -36,6 +36,7 @@ Everything to date; Concord's history begins 2026-10 with the commits below.
 
 ### Fixed
 
+- Browser tab titles now identify the current route, asset and open-break count (#829).
 - Register imports reject as-of times more than five minutes in the future (#100).
 
 ### Added
