@@ -36,6 +36,7 @@ Everything to date; Concord's history begins 2026-10 with the commits below.
 
 ### Fixed
 
+- Stale workspace conflicts now block outdated actions and prompt a reload (#830).
 - Register imports reject as-of times more than five minutes in the future (#100).
 
 ### Added
