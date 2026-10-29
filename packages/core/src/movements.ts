@@ -40,19 +40,45 @@ const TYPE_ALIASES: Record<string, JournalType> = {
 };
 
 export const JOURNAL_COLUMNS = ["ref", "date", "type", "from_account", "to_account", "units", "tx_hash"] as const;
+/** Supported variants from common transfer-agent CSV exports. */
+const JOURNAL_COLUMN_ALIASES: Record<string, string[]> = {
+  ref: ["ref", "reference", "transaction_id"],
+  date: ["date", "trade_date", "settlement_date", "transaction_date"],
+  type: ["type", "transaction_type", "movement_type"],
+  from_account: ["from_account", "from", "sender", "source_account"],
+  to_account: ["to_account", "to", "recipient", "destination_account"],
+  units: ["units", "quantity", "shares", "amount"],
+  tx_hash: ["tx_hash", "transaction_hash", "hash"],
+};
+
+function resolvedJournalColumns(headers: string[]): Record<string, string[]> {
+  const found: Record<string, string[]> = Object.create(null);
+  for (const [name, names] of Object.entries(JOURNAL_COLUMN_ALIASES)) {
+    found[name] = names.filter((n) => headers.includes(n));
+  }
+  for (const required of ["ref", "date", "type", "units"]) {
+    if (found[required]!.length === 0) {
+      throw new Error("journal CSV needs a " + required + " column (accepted: " +
+        JOURNAL_COLUMN_ALIASES[required]!.join(", ") + ")");
+    }
+  }
+  return found;
+}
 
 export function parseJournalCsv(
   text: string,
   decimals = DEFAULT_DECIMALS,
 ): { entries: JournalEntry[]; issues: ParseIssue[] } {
   const table = parseCsvTable(text);
-  for (const required of ["ref", "date", "type", "units"]) {
-    if (!table.headers.includes(required)) throw new Error(`journal CSV needs a ${required} column`);
-  }
+  const columns = resolvedJournalColumns(table.headers);
   const entries: JournalEntry[] = [];
   const issues: ParseIssue[] = [];
-  for (const { line, values } of table.records) {
+  for (const { line, values: raw } of table.records) {
     try {
+      const values: Record<string, string> = Object.assign(Object.create(null), raw);
+      for (const [key, names] of Object.entries(columns)) {
+        values[key] = names.map((name) => raw[name]).find((v) => Boolean(v)) ?? "";
+      }
       const type = TYPE_ALIASES[values.type!.toLowerCase()];
       if (!type) throw new Error(`unknown type "${values.type}"`);
       if (!values.ref) throw new Error("missing ref");
