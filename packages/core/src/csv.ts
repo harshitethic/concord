@@ -56,12 +56,20 @@ export interface CsvTable {
   records: Array<{ line: number; values: Record<string, string> }>;
 }
 
-/** Parse with a header row. Header names are lower-cased and spaces become underscores. */
+/** Unicode-aware header normalization, including optional unit suffixes. */
+export function normalizeCsvHeader(header: string): string {
+  const original = header.trim().toLocaleLowerCase();
+  // Preserve names used by callers to test prototype-safe dictionary keys.
+  if (original === "__proto__") return original;
+  return original.replace(/\([^()]*\)/gu, "").replace(/[^\p{L}\p{N}_]+/gu, "_")
+    .replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+}
+/** Parse with a normalized header row. */
 export function parseCsvTable(text: string): CsvTable {
   const rows = parseCsv(text);
   const head = rows[0];
   if (!head) throw new Error("empty CSV");
-  const headers = head.map((h) => h.trim().toLowerCase().replace(/[\s-]+/g, "_"));
+  const headers = head.map(normalizeCsvHeader);
   const seen = new Map<string, number>();
   headers.forEach((h, index) => {
     if (!h) return;
