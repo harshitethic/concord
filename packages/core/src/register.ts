@@ -78,3 +78,46 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
   }
   return { positions, issues };
 }
+
+export type RegisterChangedField = "units" | "account" | "status";
+export interface RegisterChange {
+  holderId: string;
+  before: RegisterPosition;
+  after: RegisterPosition;
+  fields: RegisterChangedField[];
+}
+export interface RegisterDiff {
+  added: RegisterPosition[];
+  removed: RegisterPosition[];
+  changed: RegisterChange[];
+}
+/** Compare by beneficial holder; several holders may share one omnibus account. */
+export function diffRegisters(before: RegisterPosition[], after: RegisterPosition[]): RegisterDiff {
+  const index = (positions: RegisterPosition[]): Map<string, RegisterPosition> => {
+    const byHolder = new Map<string, RegisterPosition>();
+    for (const position of positions) {
+      if (byHolder.has(position.holderId)) throw new Error("duplicate holder_id " + position.holderId + " in register diff");
+      byHolder.set(position.holderId, position);
+    }
+    return byHolder;
+  };
+  const oldMap = index(before);
+  const newMap = index(after);
+  const added: RegisterPosition[] = [];
+  const removed: RegisterPosition[] = [];
+  const changed: RegisterChange[] = [];
+  for (const [id, previous] of oldMap) {
+    const next = newMap.get(id);
+    if (!next) { removed.push(previous); continue; }
+    const fields: RegisterChangedField[] = [];
+    if (previous.units !== next.units) fields.push("units");
+    if (previous.account !== next.account) fields.push("account");
+    if (previous.status !== next.status) fields.push("status");
+    if (fields.length > 0) changed.push({ holderId: id, before: previous, after: next, fields });
+  }
+  for (const [id, current] of newMap) if (!oldMap.has(id)) added.push(current);
+  added.sort((a, b) => a.holderId.localeCompare(b.holderId));
+  removed.sort((a, b) => a.holderId.localeCompare(b.holderId));
+  changed.sort((a, b) => a.holderId.localeCompare(b.holderId));
+  return { added, removed, changed };
+}
