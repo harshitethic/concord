@@ -31,8 +31,24 @@ const ALIASES: Record<string, string[]> = {
   status: ["status", "state"],
 };
 
-function pick(headers: string[], field: string): string | undefined {
-  return ALIASES[field]!.find((a) => headers.includes(a));
+export interface RegisterAliasOptions {
+  /** Custom CSV names for the five canonical register fields; preferred over defaults. */
+  aliases?: Partial<Record<keyof typeof ALIASES, string[]>>;
+}
+function aliasMap(custom: RegisterAliasOptions["aliases"]): Record<string, string[]> {
+  const merged: Record<string, string[]> = Object.create(null);
+  for (const [name, defaults] of Object.entries(ALIASES)) merged[name] = [...defaults];
+  for (const [name, values] of Object.entries(custom ?? {})) {
+    if (!Object.hasOwn(ALIASES, name)) throw new Error('unknown register column "' + name + '"');
+    if (!Array.isArray(values) || !values.every((a) => typeof a === "string" && a.trim().length > 0)) {
+      throw new Error("aliases for " + name + " must be non-empty strings");
+    }
+    merged[name] = [...values.map((a) => a.trim().toLowerCase().replace(/[\s-]+/g, "_")), ...merged[name]!];
+  }
+  return merged;
+}
+function pick(headers: string[], field: string, aliases: Record<string, string[]>): string | undefined {
+  return aliases[field]!.find((a) => headers.includes(a));
 }
 
 function parseStatus(raw: string): HolderStatus | undefined {
@@ -47,16 +63,17 @@ function parseStatus(raw: string): HolderStatus | undefined {
 export const REGISTER_COLUMNS = ["holder_id", "holder_name", "account", "units", "status"] as const;
 
 /** Columns: holder_id, units, and optionally holder_name, account, status. */
-export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): ParsedRegister {
+export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS, options: RegisterAliasOptions = {}): ParsedRegister {
+  const aliases = aliasMap(options.aliases);
   const table = parseCsvTable(text);
-  const idCol = pick(table.headers, "holder_id");
-  const unitsCol = pick(table.headers, "units");
+  const idCol = pick(table.headers, "holder_id", aliases);
+  const unitsCol = pick(table.headers, "units", aliases);
   if (!idCol || !unitsCol) {
     throw new Error("register CSV needs a holder_id column and a units column");
   }
-  const nameCol = pick(table.headers, "holder_name");
-  const accountCol = pick(table.headers, "account");
-  const statusCol = pick(table.headers, "status");
+  const nameCol = pick(table.headers, "holder_name", aliases);
+  const accountCol = pick(table.headers, "account", aliases);
+  const statusCol = pick(table.headers, "status", aliases);
   const positions: RegisterPosition[] = [];
   const issues: ParseIssue[] = [];
   for (const { line, values } of table.records) {
