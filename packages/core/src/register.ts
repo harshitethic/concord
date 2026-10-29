@@ -21,7 +21,10 @@ export interface ParseIssue {
 export interface ParsedRegister {
   positions: RegisterPosition[];
   issues: ParseIssue[];
+  /** Every accepted duplicate row merged into an earlier holder position. */
+  merged?: Array<{ holderId: string; line: number; policy: "sum" | "last" }>;
 }
+export interface RegisterDuplicateOptions { duplicates?: "reject" | "sum" | "last" }
 
 const ALIASES: Record<string, string[]> = {
   holder_id: ["holder_id", "holder", "investor_id", "account_id", "id"],
@@ -47,7 +50,11 @@ function parseStatus(raw: string): HolderStatus | undefined {
 export const REGISTER_COLUMNS = ["holder_id", "holder_name", "account", "units", "status"] as const;
 
 /** Columns: holder_id, units, and optionally holder_name, account, status. */
-export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): ParsedRegister {
+export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS, options: RegisterDuplicateOptions = {}): ParsedRegister {
+  const policy = options.duplicates ?? "reject";
+  if (!["reject", "sum", "last"].includes(policy)) throw new Error("invalid duplicate holder policy");
+  const seen = new Map<string, number>();
+  const merged: NonNullable<ParsedRegister["merged"]> = [];
   const table = parseCsvTable(text);
   const idCol = pick(table.headers, "holder_id");
   const unitsCol = pick(table.headers, "units");
@@ -71,10 +78,34 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
         const status = parseStatus(values[statusCol]!);
         if (status) position.status = status;
       }
+      const previousIndex = seen.get(holderId);
+      if (previousIndex !== undefined) {
+        if (policy === "reject") throw new Error("duplicate holder_id " + holderId);
+        const previous = positions[previousIndex]!;
+        if (policy === "sum") {
+          // Same holder split across lots is legitimate, but different accounts
+          // or frozen states must not be silently combined in one position.
+          if (previous.account && position.account && previous.account !== position.account) {
+            throw new Error("conflicting account for duplicate holder_id " + holderId);
+          }
+          if (previous.status && position.status && previous.status !== position.status) {
+            throw new Error("conflicting status for duplicate holder_id " + holderId);
+          }
+          previous.units += position.units;
+          previous.account ??= position.account;
+          previous.status ??= position.status;
+          previous.holderName ??= position.holderName;
+        } else {
+          positions[previousIndex] = position;
+        }
+        merged.push({ holderId, line, policy });
+        continue;
+      }
+      seen.set(holderId, positions.length);
       positions.push(position);
     } catch (err) {
       issues.push({ line, message: (err as Error).message });
     }
   }
-  return { positions, issues };
+  return { positions, issues, ...(merged.length > 0 ? { merged } : {}) };
 }
