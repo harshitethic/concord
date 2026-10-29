@@ -35,19 +35,30 @@ function pick(headers: string[], field: string): string | undefined {
   return ALIASES[field]!.find((a) => headers.includes(a));
 }
 
-function parseStatus(raw: string): HolderStatus | undefined {
-  const s = raw.toLowerCase();
-  if (s === "") return undefined;
-  if (["active", "authorized", "authorised", "open"].includes(s)) return "active";
-  if (["frozen", "restricted", "blocked", "suspended"].includes(s)) return "frozen";
-  throw new Error(`unknown status "${raw}"`);
+export interface RegisterStatusOptions {
+  statusMap?: Record<string, HolderStatus>;
+}
+function parseStatus(raw: string, custom: RegisterStatusOptions["statusMap"] = {}): HolderStatus | undefined {
+  const synonyms: Record<string, HolderStatus> = Object.assign(Object.create(null), {
+    active: "active", authorized: "active", authorised: "active", open: "active",
+    frozen: "frozen", restricted: "frozen", blocked: "frozen", suspended: "frozen",
+  });
+  for (const [key, value] of Object.entries(custom)) {
+    if (value !== "active" && value !== "frozen") throw new Error('invalid status mapping for "' + key + '"');
+    if (!key.trim()) throw new Error("status aliases cannot be empty");
+    synonyms[key.trim().toLowerCase()] = value;
+  }
+  const s = raw.trim().toLowerCase();
+  if (!s) return undefined;
+  if (Object.hasOwn(synonyms, s)) return synonyms[s];
+  throw new Error('unknown status "' + raw + '"; accepted: ' + Object.keys(synonyms).join(", "));
 }
 
 /** The register's columns as Concord names them, in the order a template lists them. */
 export const REGISTER_COLUMNS = ["holder_id", "holder_name", "account", "units", "status"] as const;
 
 /** Columns: holder_id, units, and optionally holder_name, account, status. */
-export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): ParsedRegister {
+export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS, options: RegisterStatusOptions = {}): ParsedRegister {
   const table = parseCsvTable(text);
   const idCol = pick(table.headers, "holder_id");
   const unitsCol = pick(table.headers, "units");
@@ -68,7 +79,7 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
       if (nameCol && values[nameCol]) position.holderName = values[nameCol];
       if (accountCol && values[accountCol]) position.account = values[accountCol];
       if (statusCol) {
-        const status = parseStatus(values[statusCol]!);
+        const status = parseStatus(values[statusCol]!, options.statusMap);
         if (status) position.status = status;
       }
       positions.push(position);
