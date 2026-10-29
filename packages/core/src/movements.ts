@@ -1,5 +1,5 @@
 import { parseUnits, DEFAULT_DECIMALS } from "./amount.js";
-import { parseCsvTable } from "./csv.js";
+import { parseCsvTable, type CsvParseOptions } from "./csv.js";
 import type { AssetEvent, EventKind } from "./events.js";
 import { sortEvents } from "./events.js";
 import type { ParseIssue } from "./register.js";
@@ -44,8 +44,9 @@ export const JOURNAL_COLUMNS = ["ref", "date", "type", "from_account", "to_accou
 export function parseJournalCsv(
   text: string,
   decimals = DEFAULT_DECIMALS,
+  options: CsvParseOptions = {},
 ): { entries: JournalEntry[]; issues: ParseIssue[] } {
-  const table = parseCsvTable(text);
+  const table = parseCsvTable(text, options);
   for (const required of ["ref", "date", "type", "units"]) {
     if (!table.headers.includes(required)) throw new Error(`journal CSV needs a ${required} column`);
   }

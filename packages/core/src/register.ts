@@ -1,5 +1,5 @@
 import { parseUnits, DEFAULT_DECIMALS } from "./amount.js";
-import { parseCsvTable } from "./csv.js";
+import { parseCsvTable, type CsvParseOptions } from "./csv.js";
 
 export type HolderStatus = "active" | "frozen";
 
@@ -47,8 +47,8 @@ function parseStatus(raw: string): HolderStatus | undefined {
 export const REGISTER_COLUMNS = ["holder_id", "holder_name", "account", "units", "status"] as const;
 
 /** Columns: holder_id, units, and optionally holder_name, account, status. */
-export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): ParsedRegister {
-  const table = parseCsvTable(text);
+export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS, options: CsvParseOptions = {}): ParsedRegister {
+  const table = parseCsvTable(text, options);
   const idCol = pick(table.headers, "holder_id");
   const unitsCol = pick(table.headers, "units");
   if (!idCol || !unitsCol) {

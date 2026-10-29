@@ -1,5 +1,8 @@
 /** Minimal RFC 4180 reader and writer. Registers arrive as CSV exports from TA systems. */
-export function parseCsv(text: string): string[][] {
+
+export interface CsvParseOptions { delimiter?: "," | ";" | "\t" | "|" }
+export function parseCsv(text: string, options: CsvParseOptions = {}): string[][] {
+  const delimiter = options.delimiter ?? ",";
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -20,15 +23,15 @@ export function parseCsv(text: string): string[][] {
       } else {
         field += c;
       }
-    } else if (afterQuote && (c === " " || c === "\t")) {
+    } else if (afterQuote && (c === " " || (c === "\t" && delimiter !== "\t"))) {
       // Ignore optional spaces after a closed quoted field.
-    } else if (afterQuote && c !== "," && c !== "\n" && c !== "\r") {
+    } else if (afterQuote && c !== delimiter && c !== "\n" && c !== "\r") {
       const lines = src.slice(0, i).split(/\r\n|\r|\n/);
       const column = lines[lines.length - 1]!.length + 1;
       throw new Error("unexpected character after closing quote at line " + lines.length + ", column " + column);
     } else if (c === '"' && field === "") {
       quoted = true;
-    } else if (c === ",") {
+    } else if (c === delimiter) {
       row.push(field);
       field = "";
       afterQuote = false;
@@ -57,8 +60,8 @@ export interface CsvTable {
 }
 
 /** Parse with a header row. Header names are lower-cased and spaces become underscores. */
-export function parseCsvTable(text: string): CsvTable {
-  const rows = parseCsv(text);
+export function parseCsvTable(text: string, options: CsvParseOptions = {}): CsvTable {
+  const rows = parseCsv(text, options);
   const head = rows[0];
   if (!head) throw new Error("empty CSV");
   const headers = head.map((h) => h.trim().toLowerCase().replace(/[\s-]+/g, "_"));
