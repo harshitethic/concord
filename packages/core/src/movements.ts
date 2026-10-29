@@ -17,6 +17,8 @@ export interface JournalEntry {
   to?: string;
   units: bigint;
   txHash?: string;
+  /** Optional 500-character journal narrative for auditors. */
+  memo?: string;
 }
 
 /** A forced redemption is executed as a clawback, a voluntary one as a payment to the issuer. */
@@ -71,6 +73,9 @@ export function parseJournalCsv(
       if (from) entry.from = from;
       if (to) entry.to = to;
       if (values.tx_hash) entry.txHash = values.tx_hash.toLowerCase();
+      const memo = values.memo || values.note || values.description;
+      if (memo && memo.length > 500) throw new Error("journal memo exceeds 500 characters");
+      if (memo) entry.memo = memo;
       if (type === "issue" && !entry.to) throw new Error("issue needs to_account");
       if (type !== "issue" && !entry.from) throw new Error(`${type} needs from_account`);
       if (type === "transfer" && !entry.to) throw new Error("transfer needs to_account");
