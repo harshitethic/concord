@@ -101,8 +101,22 @@ function escape(value: unknown): string {
   return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 }
 
-export function toCsv(headers: string[], rows: Array<Record<string, unknown>>): string {
-  const lines = [headers.map(escape).join(",")];
-  for (const r of rows) lines.push(headers.map((h) => escape(r[h])).join(","));
+export interface CsvColumn {
+  /** Original key in each record. */
+  key: string;
+  /** Optional export header, which can differ from the source record field. */
+  header?: string;
+  /** Override the value before RFC-4180 quoting and type validation. */
+  format?: (value: unknown) => unknown;
+}
+
+/** Existing string[] callers remain compatible; formatters only run when requested. */
+export function toCsv(columns: Array<string | CsvColumn>, rows: Array<Record<string, unknown>>): string {
+  const resolved = columns.map((c) => typeof c === "string" ? { key: c, header: c } : c);
+  const lines = [resolved.map((c) => escape(c.header ?? c.key)).join(",")];
+  for (const r of rows) lines.push(resolved.map((c) => {
+    const value = r[c.key];
+    return escape("format" in c && c.format ? c.format(value) : value);
+  }).join(","));
   return lines.join("\n") + "\n";
 }
