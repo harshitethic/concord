@@ -14,18 +14,21 @@ export function Export({ asset }: { asset: AssetSummary }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const { busy, error, run } = useAction();
+  const invalidPeriod = Boolean(from && to && localToIso(from) > localToIso(to));
   const query = () => {
     const q = new URLSearchParams();
     if (from) q.set("from", localToIso(from));
     if (to) q.set("to", localToIso(to));
     return q;
   };
-  const get = (extra: Record<string, string>, name: string) =>
-    run(() => {
+  const get = (extra: Record<string, string>, name: string) => {
+    if (invalidPeriod) return Promise.resolve(false);
+    return run(() => {
       const q = query();
       for (const [k, v] of Object.entries(extra)) q.set(k, v);
       return download(`/assets/${asset.id}/export?${q}`, name);
     });
+  };
   return (
     <div className="flex flex-col gap-8">
       <div className="grid max-w-xl gap-4 md:grid-cols-2">
@@ -36,6 +39,7 @@ export function Export({ asset }: { asset: AssetSummary }) {
           <input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} className={inputClass} />
         </Field>
       </div>
+      {invalidPeriod && <ErrorNote message="Period from must be earlier than or equal to period to." />}
       {error && <ErrorNote message={error} />}
       <Section title="Audit pack">
         <p className="max-w-[65ch] text-[13px] text-muted">
@@ -43,7 +47,7 @@ export function Export({ asset }: { asset: AssetSummary }) {
           period. It carries a SHA-256 digest of its content so a reviewer can confirm it was not altered.
         </p>
         <div>
-          <Button variant="primary" busy={busy} onClick={() => void get({ download: "1" }, `concord-${asset.code}-audit.json`)}>
+          <Button variant="primary" busy={busy} disabled={invalidPeriod} onClick={() => void get({ download: "1" }, `concord-${asset.code}-audit.json`)}>
             <DownloadSimple size={16} />
             Download audit pack
           </Button>
@@ -57,7 +61,7 @@ export function Export({ asset }: { asset: AssetSummary }) {
                 <p className="font-medium">{title}</p>
                 <p className="text-[13px] text-muted">{text}</p>
               </div>
-              <Button busy={busy} onClick={() => void get({ section: key }, `concord-${asset.code}-${key}.csv`)}>
+              <Button busy={busy} disabled={invalidPeriod} onClick={() => void get({ section: key }, `concord-${asset.code}-${key}.csv`)}>
                 <DownloadSimple size={16} />
                 CSV
               </Button>
