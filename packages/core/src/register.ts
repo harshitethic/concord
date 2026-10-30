@@ -21,6 +21,9 @@ export interface ParseIssue {
 export interface ParsedRegister {
   positions: RegisterPosition[];
   issues: ParseIssue[];
+  /** Actual count, even when diagnostic examples have been capped. */
+  total: number;
+  truncated: boolean;
 }
 
 const ALIASES: Record<string, string[]> = {
@@ -59,6 +62,9 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
   const statusCol = pick(table.headers, "status");
   const positions: RegisterPosition[] = [];
   const issues: ParseIssue[] = [];
+  const MAX_ISSUES = 200;
+  let total = 0;
+  let lastIssueLine = 0;
   for (const { line, values } of table.records) {
     try {
       const holderId = values[idCol]!;
@@ -73,8 +79,16 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
       }
       positions.push(position);
     } catch (err) {
-      issues.push({ line, message: (err as Error).message });
+      total++;
+      lastIssueLine = line;
+      // Reserve the final slot for a useful summary when rows are omitted.
+      if (issues.length < MAX_ISSUES - 1) issues.push({ line, message: (err as Error).message });
     }
   }
-  return { positions, issues };
+  const truncated = total > issues.length;
+  if (truncated) issues.push({
+    line: lastIssueLine,
+    message: `${total - issues.length} additional invalid rows omitted (${total} total).`,
+  });
+  return { positions, issues, total, truncated };
 }
