@@ -1,5 +1,5 @@
 import { ArrowsClockwise, GearSix, SignOut } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type AssetSummary, type Network, type Overview as OverviewData } from "./api";
 import { EphemeralNotice, Invite, Reset, SignIn, SignUp, googleError } from "./Auth";
 import { Overview } from "./Overview";
@@ -297,13 +297,41 @@ function AssetHeader({ asset, onChange }: { asset: AssetSummary; onChange: () =>
   );
 }
 
+/** Pause background requests in hidden tabs; refresh immediately when visible again. */
+export function useVisiblePolling(reload: () => void, delay: number): void {
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const stop = () => {
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+    };
+    const start = () => {
+      stop();
+      if (!document.hidden) timer = setInterval(reload, delay);
+    };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else {
+        reload();
+        start();
+      }
+    };
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [reload, delay]);
+}
+
 function Shell({ route }: { route: Route }) {
   const me = useMe();
   const { config, network, setNetwork, signOut } = useSession();
   const [data, setData] = useState<OverviewData>();
   const [error, setError] = useState<string>();
   const [tick, setTick] = useState(0);
-  const reload = () => setTick((t) => t + 1);
+  const reload = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let live = true;
@@ -322,10 +350,7 @@ function Shell({ route }: { route: Route }) {
   // The server indexes in the background; keep the figures current without a manual refresh,
   // and look more often while an asset is still being read for the first time.
   const settling = data?.assets.some((a) => a.state === "indexing") ?? false;
-  useEffect(() => {
-    const id = setInterval(reload, settling ? 4_000 : 30_000);
-    return () => clearInterval(id);
-  }, [settling]);
+  useVisiblePolling(reload, error ? 120_000 : settling ? 4_000 : 30_000);
 
   // After signing in, the address still names the sign-in page.
   useEffect(() => {
