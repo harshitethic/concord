@@ -33,6 +33,7 @@ value.
 | `RENDER_EXTERNAL_URL` | Set by Render | As `CONCORD_PUBLIC_URL`. Read only when `CONCORD_PUBLIC_URL` is unset or empty | As `CONCORD_PUBLIC_URL` |
 | `CONCORD_TRUST_PROXY` | `0` | A whole number of proxy hops, 0 or more | Not a whole number, or below 0 |
 | `CONCORD_WEB_DIR` | `<repo>/apps/web/dist` | A directory holding the built dashboard. A relative path is resolved against the repository root, not the working directory | Not checked |
+| `CONCORD_BUILD_SHA` | Unset | Optional 7–40 digit hex commit SHA; first 7 digits appended to audit-pack generator metadata | Invalid values are ignored (package version still recorded) |
 | `CONCORD_DATA_DIR` | `<repo>/data` | A directory on a local disk. A relative path is resolved against the repository root, not the working directory | Not checked |
 | `CONCORD_EPHEMERAL` | Off | `1` or `true` turns it on. Anything else, `TRUE` and `yes` included, leaves it off | Never |
 | `CONCORD_SIGNUP` | `open` | `open` or `code` | Anything else, including an empty value |
