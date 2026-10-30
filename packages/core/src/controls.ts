@@ -28,7 +28,8 @@ export function parseInstructionsCsv(
 ): { instructions: Instruction[]; issues: ParseIssue[] } {
   const table = parseCsvTable(text);
   for (const required of ["ref", "type", "account", "issued_at"]) {
-    if (!table.headers.includes(required)) throw new Error(`instructions CSV needs a ${required} column`);
+    if (!table.headers.includes(required))
+      throw new Error("instructions CSV needs a " + required + " column; found: " + (table.headers.join(", ") || "(none)") + "; accepted: " + INSTRUCTION_COLUMNS.join(", "));
   }
   const instructions: Instruction[] = [];
   const issues: ParseIssue[] = [];

@@ -47,7 +47,8 @@ export function parseJournalCsv(
 ): { entries: JournalEntry[]; issues: ParseIssue[] } {
   const table = parseCsvTable(text);
   for (const required of ["ref", "date", "type", "units"]) {
-    if (!table.headers.includes(required)) throw new Error(`journal CSV needs a ${required} column`);
+    if (!table.headers.includes(required))
+      throw new Error("journal CSV needs a " + required + " column; found: " + (table.headers.join(", ") || "(none)") + "; accepted: " + JOURNAL_COLUMNS.join(", "));
   }
   const entries: JournalEntry[] = [];
   const issues: ParseIssue[] = [];

@@ -52,7 +52,10 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
   const idCol = pick(table.headers, "holder_id");
   const unitsCol = pick(table.headers, "units");
   if (!idCol || !unitsCol) {
-    throw new Error("register CSV needs a holder_id column and a units column");
+    throw new Error(
+      "register CSV needs a holder_id column and a units column" +
+      `; found: ${table.headers.join(", ") || "(none)"}; accepted holder aliases: ${ALIASES.holder_id!.join(", ")}; accepted unit aliases: ${ALIASES.units!.join(", ")}`,
+    );
   }
   const nameCol = pick(table.headers, "holder_name");
   const accountCol = pick(table.headers, "account");
