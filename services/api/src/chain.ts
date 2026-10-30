@@ -107,6 +107,8 @@ export interface RawEvent {
   ledgerClosedAt: string;
   contractId: string;
   txHash: string;
+  /** Deprecated on newer RPC servers; false means this event belongs to a rolled-back subcall. */
+  inSuccessfulContractCall?: boolean;
   topic: string[];
   value: string;
 }
@@ -137,6 +139,8 @@ const MALFORMED: Decoded = { malformed: true };
  * first on mint, clawback and set_authorized, so the subject is always the last address.
  */
 export function decodeEventDetailed(raw: RawEvent): Decoded {
+  // RPC 30+ omits this deprecated flag. Only an explicit false is rejected.
+  if (raw.inSuccessfulContractCall === false) return IGNORED;
   try {
     const topics = raw.topic.map(native);
     const kind = topics[0];
