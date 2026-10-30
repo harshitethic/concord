@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { join, resolve } from "node:path";
+import { registerSourceName } from "./cli-source.js";
 import { backup } from "node:sqlite";
 import { parseArgs } from "node:util";
 import type { ActionInput, Actor, Concord, WatchInput } from "./concord.js";
@@ -167,7 +168,7 @@ async function main(): Promise<void> {
       const file = need(b, "file");
       const imported = concord.importRegister(
         asset,
-        { csv: readFileSync(file, "utf8"), asOf: need(values["as-of"], "--as-of"), source: file },
+        { csv: readFileSync(file, "utf8"), asOf: need(values["as-of"], "--as-of"), source: registerSourceName(file) },
         actor,
       );
       if (imported.duplicate) {
