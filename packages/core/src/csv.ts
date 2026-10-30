@@ -26,7 +26,9 @@ export function parseCsv(text: string): string[][] {
       const lines = src.slice(0, i).split(/\r\n|\r|\n/);
       const column = lines[lines.length - 1]!.length + 1;
       throw new Error("unexpected character after closing quote at line " + lines.length + ", column " + column);
-    } else if (c === '"' && field === "") {
+    } else if (c === '"' && field.trim() === "") {
+      // Some TA exports pad after the comma before a quoted field.
+      field = "";
       quoted = true;
     } else if (c === ",") {
       row.push(field);
