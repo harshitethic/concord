@@ -32,8 +32,10 @@ export function parseInstructionsCsv(
   }
   const instructions: Instruction[] = [];
   const issues: ParseIssue[] = [];
-  for (const { line, values } of table.records) {
+  for (const { line, values, cells } of table.records) {
     try {
+      if (cells !== table.headers.length)
+        throw new Error(`expected ${table.headers.length} cells, found ${cells}`);
       const type = values.type!.toLowerCase().replace("authorise", "authorize");
       if (!["authorize", "freeze", "unfreeze", "clawback"].includes(type)) {
         throw new Error(`unknown type "${values.type}"`);

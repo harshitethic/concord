@@ -59,8 +59,10 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
   const statusCol = pick(table.headers, "status");
   const positions: RegisterPosition[] = [];
   const issues: ParseIssue[] = [];
-  for (const { line, values } of table.records) {
+  for (const { line, values, cells } of table.records) {
     try {
+      if (cells !== table.headers.length)
+        throw new Error(`expected ${table.headers.length} cells, found ${cells}`);
       const holderId = values[idCol]!;
       if (!holderId) throw new Error("missing holder_id");
       const position: RegisterPosition = { holderId, units: parseUnits(values[unitsCol]!, decimals) };

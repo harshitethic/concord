@@ -51,8 +51,10 @@ export function parseJournalCsv(
   }
   const entries: JournalEntry[] = [];
   const issues: ParseIssue[] = [];
-  for (const { line, values } of table.records) {
+  for (const { line, values, cells } of table.records) {
     try {
+      if (cells !== table.headers.length)
+        throw new Error(`expected ${table.headers.length} cells, found ${cells}`);
       const type = TYPE_ALIASES[values.type!.toLowerCase()];
       if (!type) throw new Error(`unknown type "${values.type}"`);
       if (!values.ref) throw new Error("missing ref");

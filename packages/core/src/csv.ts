@@ -53,7 +53,7 @@ export function parseCsv(text: string): string[][] {
 
 export interface CsvTable {
   headers: string[];
-  records: Array<{ line: number; values: Record<string, string> }>;
+  records: Array<{ line: number; cells: number; values: Record<string, string> }>;
 }
 
 /** Parse with a header row. Header names are lower-cased and spaces become underscores. */
@@ -78,7 +78,7 @@ export function parseCsvTable(text: string): CsvTable {
       if (!h) return; // Empty header slots have no corresponding column name.
       values[h] = (r[j] ?? "").trim();
     });
-    return { line: i + 2, values };
+    return { line: i + 2, cells: r.length, values };
   });
   return { headers, records };
 }
