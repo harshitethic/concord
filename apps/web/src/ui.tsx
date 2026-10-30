@@ -312,8 +312,13 @@ export function ErrorNote({ message }: { message: string }) {
   );
 }
 
-export function Notice({ children }: { children: ReactNode }) {
-  return <div className="rounded bg-warn-bg px-3 py-2 text-[13px] text-warn">{children}</div>;
+/** Dynamic notices are announced politely; static notices should opt out with live={false}. */
+export function Notice({ children, live = true }: { children: ReactNode; live?: boolean }) {
+  return (
+    <div role={live ? "status" : undefined} aria-live={live ? "polite" : undefined} className="rounded bg-warn-bg px-3 py-2 text-[13px] text-warn">
+      {children}
+    </div>
+  );
 }
 
 /** Rows a CSV import turned away, with the line each came from. */

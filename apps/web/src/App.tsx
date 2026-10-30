@@ -414,7 +414,7 @@ function Shell({ route }: { route: Route }) {
         <main id="main" className="flex min-w-0 flex-col gap-6 px-4 py-6 md:px-8">
           <EphemeralNotice />
           {network === "testnet" && route.page !== "settings" && (
-            <Notice>Testnet is a practice network. Nothing on these pages is a real security or a real holder.</Notice>
+            <Notice live={false}>Testnet is a practice network. Nothing on these pages is a real security or a real holder.</Notice>
           )}
           <ErrorBoundary key={`${route.page}-${route.assetId ?? ""}-${route.tab}`}>
             {route.page === "settings" ? (
