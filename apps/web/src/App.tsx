@@ -40,11 +40,31 @@ const TABS = [
 type TabKey = (typeof TABS)[number][0];
 
 interface Route {
-  page: "home" | "asset" | "settings" | "signin" | "signup" | "invite" | "reset";
+  page: "home" | "asset" | "settings" | "signin" | "signup" | "invite" | "reset" | "notfound";
+  invalidTab?: boolean;
   assetId?: string;
   tab: TabKey;
   token?: string;
   query: URLSearchParams;
+}
+
+/** Parse URLs without silently pretending an invalid page or tab is valid. */
+export function parseRoute(hash: string): Route {
+  const [path = "", search = ""] = hash.replace(/^#/, "").split("?");
+  const [, scope, first, second] = path.split("/");
+  const base = { tab: "reconciliation" as TabKey, query: new URLSearchParams(search) };
+  if (scope === "a" && first) {
+    const valid = !second || TABS.some(([key]) => key === second);
+    return {
+      ...base, page: "asset", assetId: first,
+      tab: valid ? (second || "reconciliation") as TabKey : "reconciliation",
+      ...(valid ? {} : { invalidTab: true }),
+    };
+  }
+  if ((scope === "invite" || scope === "reset") && first) return { ...base, page: scope, token: first };
+  if (scope === "settings" || scope === "signin" || scope === "signup") return { ...base, page: scope };
+  if (scope === undefined || (scope === "" && !first)) return { ...base, page: "home" };
+  return { ...base, page: "notfound" };
 }
 
 function useRoute(): Route {
@@ -54,16 +74,15 @@ function useRoute(): Route {
     addEventListener("hashchange", on);
     return () => removeEventListener("hashchange", on);
   }, []);
-  const [path = "", search = ""] = hash.replace(/^#/, "").split("?");
-  const [, scope, first, second] = path.split("/");
-  const base = { tab: "reconciliation" as TabKey, query: new URLSearchParams(search) };
-  if (scope === "a" && first) {
-    const known = TABS.some(([key]) => key === second);
-    return { ...base, page: "asset", assetId: first, tab: known ? (second as TabKey) : "reconciliation" };
-  }
-  if ((scope === "invite" || scope === "reset") && first) return { ...base, page: scope, token: first };
-  if (scope === "settings" || scope === "signin" || scope === "signup") return { ...base, page: scope };
-  return { ...base, page: "home" };
+  const route = parseRoute(hash);
+  useEffect(() => {
+    if (route.page === "asset" && route.invalidTab && route.assetId) {
+      const canonical = `#/a/${route.assetId}/reconciliation`;
+      history.replaceState(null, "", canonical);
+      setHash(canonical);
+    }
+  }, [hash, route.invalidTab, route.assetId, route.page]);
+  return route;
 }
 
 const NETWORK_LABEL: Record<Network, string> = { mainnet: "Mainnet", testnet: "Testnet" };
@@ -423,7 +442,13 @@ function Shell({ route }: { route: Route }) {
               <>
                 {error && <ErrorNote message={data ? `Figures may be out of date. ${error}` : error} />}
                 {!data && !error && <Skeleton rows={8} />}
-                {data && route.page !== "asset" && <Overview assets={shown} network={network} onChange={reload} />}
+                {route.page === "notfound" && (
+                  <div className="flex flex-col items-start gap-3" role="status">
+                    <ErrorNote message="Page not found." />
+                    <a href="#/" className="text-[13px] font-medium text-accent hover:underline">All assets</a>
+                  </div>
+                )}
+                {data && route.page !== "asset" && route.page !== "notfound" && <Overview assets={shown} network={network} onChange={reload} />}
                 {data && route.page === "asset" && !asset && (
                   <div className="flex flex-col items-start gap-3">
                     <ErrorNote message="This workspace is not watching that asset." />
