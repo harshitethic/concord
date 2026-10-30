@@ -488,12 +488,40 @@ function Boot({ error }: { error?: string | undefined }) {
   );
 }
 
+/** Extract a one-time OAuth redirect banner without dropping unrelated URL parameters. */
+export function consumeGoogleError(hash: string): { message?: string; cleanHash?: string } {
+  const [path = "", search = ""] = hash.replace(/^#/, "").split("?");
+  const query = new URLSearchParams(search);
+  const code = query.get("error");
+  if (!code) return {};
+  query.delete("error");
+  return {
+    ...(googleError(code) ? { message: googleError(code) } : {}),
+    cleanHash: `#${path}${query.size ? "?" + query.toString() : ""}`,
+  };
+}
+
 function Routes() {
   const route = useRoute();
   // Hash routes otherwise preserve the previous scroll position and keyboard focus.
   useEffect(focusRouteContent, [route.page, route.assetId, route.tab, route.token]);
   const { me } = useSession();
-  const error = googleError(route.query.get("error") ?? undefined);
+  const [authError, setAuthError] = useState<string | undefined>(() => {
+    const result = consumeGoogleError(location.hash);
+    if (result.cleanHash) history.replaceState(null, "", result.cleanHash);
+    return result.message;
+  });
+  useEffect(() => {
+    // A redirected login can be handled without leaving the code in history.
+    const result = consumeGoogleError(location.hash);
+    if (result.cleanHash) {
+      history.replaceState(null, "", result.cleanHash);
+      setAuthError(result.message);
+    } else if (route.page !== "signin" && route.page !== "signup") {
+      setAuthError(undefined);
+    }
+  }, [route.page, route.query.toString()]);
+  const error = authError;
   if (route.page === "invite" && route.token) return <Invite key={route.token} token={route.token} />;
   if (!me) {
     if (route.page === "reset" && route.token) return <Reset token={route.token} />;
