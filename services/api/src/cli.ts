@@ -76,7 +76,8 @@ async function main(): Promise<void> {
     );
   };
 
-  switch (command) {
+  try {
+    switch (command) {
     // ── operator ────────────────────────────────────────────────────────────
     case "orgs":
       table(auth.listOrgs().map((o) => ({ id: o.id, name: o.name, members: o.members, created: o.created_at })));
@@ -254,7 +255,10 @@ async function main(): Promise<void> {
     default:
       throw new Error(`unknown command "${command}"\n\n${USAGE}`);
   }
-  runtime.close();
+  } finally {
+    // Early --json returns and command failures must checkpoint SQLite WALs.
+    runtime.close();
+  }
 }
 
 main().catch((err: Error) => {
