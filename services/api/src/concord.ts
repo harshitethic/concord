@@ -1731,6 +1731,8 @@ export class Concord {
 
   /** One section of the audit pack as CSV. */
   exportCsv(ref: string, section: string, period: { from?: string; to?: string } = {}): string {
+    if (!["holdings", "events", "controls", "breaks"].includes(section))
+      throw new Invalid("section must be holdings, events, controls or breaks");
     const pack = this.auditExport(ref, period);
     switch (section) {
       case "holdings":
