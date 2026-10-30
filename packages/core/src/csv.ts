@@ -1,6 +1,10 @@
 /** Minimal RFC 4180 reader and writer. Registers arrive as CSV exports from TA systems. */
-export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
+interface CsvRow { cells: string[]; line: number }
+
+function parseCsvRows(text: string): CsvRow[] {
+  const rows: CsvRow[] = [];
+  let physicalLine = 1;
+  let rowStartLine = 1;
   let row: string[] = [];
   let field = "";
   let quoted = false;
@@ -8,6 +12,8 @@ export function parseCsv(text: string): string[][] {
   const src = text.replace(/^﻿/, "");
   for (let i = 0; i < src.length; i++) {
     const c = src[i]!;
+    // CRLF is one physical line, including when inside an embedded quoted field.
+    if (c === "\r" || (c === "\n" && src[i - 1] !== "\r")) physicalLine++;
     if (quoted) {
       if (c === '"') {
         if (src[i + 1] === '"') {
@@ -37,8 +43,9 @@ export function parseCsv(text: string): string[][] {
       row.push(field);
       field = "";
       afterQuote = false;
-      rows.push(row);
+      rows.push({ cells: row, line: rowStartLine });
       row = [];
+      rowStartLine = physicalLine;
     } else {
       field += c;
     }
@@ -46,9 +53,14 @@ export function parseCsv(text: string): string[][] {
   if (quoted) throw new Error("unterminated quoted field");
   if (field !== "" || row.length > 0) {
     row.push(field);
-    rows.push(row);
+    rows.push({ cells: row, line: rowStartLine });
   }
-  return rows.filter((r) => r.some((f) => f.trim() !== ""));
+  return rows.filter((r) => r.cells.some((f) => f.trim() !== ""));
+}
+
+/** Preserve the original rows-only API for callers without file-line needs. */
+export function parseCsv(text: string): string[][] {
+  return parseCsvRows(text).map((row) => row.cells);
 }
 
 export interface CsvTable {
@@ -58,8 +70,8 @@ export interface CsvTable {
 
 /** Parse with a header row. Header names are lower-cased and spaces become underscores. */
 export function parseCsvTable(text: string): CsvTable {
-  const rows = parseCsv(text);
-  const head = rows[0];
+  const rows = parseCsvRows(text);
+  const head = rows[0]?.cells;
   if (!head) throw new Error("empty CSV");
   const headers = head.map((h) => h.trim().toLowerCase().replace(/[\s-]+/g, "_"));
   const seen = new Map<string, number>();
@@ -71,14 +83,14 @@ export function parseCsvTable(text: string): CsvTable {
     }
     seen.set(h, index + 1);
   });
-  const records = rows.slice(1).map((r, i) => {
+  const records = rows.slice(1).map(({ cells: r, line }) => {
     // Untrusted header names must not inherit or mutate Object.prototype.
     const values: Record<string, string> = Object.create(null);
     headers.forEach((h, j) => {
       if (!h) return; // Empty header slots have no corresponding column name.
       values[h] = (r[j] ?? "").trim();
     });
-    return { line: i + 2, values };
+    return { line, values };
   });
   return { headers, records };
 }
