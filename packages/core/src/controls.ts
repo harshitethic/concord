@@ -34,9 +34,10 @@ export function parseInstructionsCsv(
   const issues: ParseIssue[] = [];
   for (const { line, values } of table.records) {
     try {
-      const type = values.type!.toLowerCase().replace("authorise", "authorize");
+      const rawType = values.type!.toLowerCase();
+      const type = ["authorise", "authorised", "authorized"].includes(rawType) ? "authorize" : rawType;
       if (!["authorize", "freeze", "unfreeze", "clawback"].includes(type)) {
-        throw new Error(`unknown type "${values.type}"`);
+        throw new Error("unknown type " + JSON.stringify(values.type) + "; accepted: authorize, authorise, authorised, freeze, unfreeze, clawback");
       }
       if (!values.ref) throw new Error("missing ref");
       if (!values.account) throw new Error("missing account");

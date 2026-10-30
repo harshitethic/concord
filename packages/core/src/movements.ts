@@ -54,7 +54,7 @@ export function parseJournalCsv(
   for (const { line, values } of table.records) {
     try {
       const type = TYPE_ALIASES[values.type!.toLowerCase()];
-      if (!type) throw new Error(`unknown type "${values.type}"`);
+      if (!type) throw new Error("unknown type " + JSON.stringify(values.type) + "; accepted: " + Object.keys(TYPE_ALIASES).join(", "));
       if (!values.ref) throw new Error("missing ref");
       if (Number.isNaN(Date.parse(values.date!))) throw new Error(`bad date "${values.date}"`);
       const units = parseUnits(values.units!, decimals);

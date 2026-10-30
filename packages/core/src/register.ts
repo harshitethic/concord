@@ -40,7 +40,7 @@ function parseStatus(raw: string): HolderStatus | undefined {
   if (s === "") return undefined;
   if (["active", "authorized", "authorised", "open"].includes(s)) return "active";
   if (["frozen", "restricted", "blocked", "suspended"].includes(s)) return "frozen";
-  throw new Error(`unknown status "${raw}"`);
+  throw new Error("unknown status " + JSON.stringify(raw) + "; accepted: active, authorized, authorised, open, frozen, restricted, blocked, suspended");
 }
 
 /** The register's columns as Concord names them, in the order a template lists them. */
