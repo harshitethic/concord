@@ -214,10 +214,17 @@ function label(value: unknown, field: string, max = 120): string | undefined {
 }
 
 /** What to tell the dashboard about a failed pass. Internals stay in the server log. */
-function describeFailure(err: unknown): string {
+export function describeFailure(err: unknown): string {
   if (err instanceof ChainError || err instanceof Invalid || err instanceof NotFound) return err.message;
   console.error(err);
-  return "Indexing stopped on an unexpected error.";
+  if (err instanceof Error) {
+    const code = "code" in err && typeof err.code === "string" ? err.code : "";
+    if (code === "SQLITE_BUSY" || /(?:SQLITE_BUSY|database is locked|database is busy)/i.test(err.message))
+      return "[db_locked] Indexing paused because the workspace database is busy. Retry shortly.";
+    if (code === "SQLITE_FULL" || /(?:SQLITE_FULL|database or disk is full)/i.test(err.message))
+      return "[disk_full] Indexing paused because storage is full. Free space and retry.";
+  }
+  return "[internal] Indexing stopped unexpectedly. Check the server log.";
 }
 
 function toAsset(row: Row): AssetRecord {

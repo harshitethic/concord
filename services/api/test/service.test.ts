@@ -899,7 +899,7 @@ describe("Concord", () => {
     const stalled = concord.asset("FUND");
     // The first page is kept, but the asset does not claim to be indexed to ledger 200.
     expect(stalled).toMatchObject({ syncedLedger: 100, syncedAt: before.syncedAt });
-    expect(stalled.syncError).toBe("Indexing stopped on an unexpected error.");
+    expect(stalled.syncError).toBe("[internal] Indexing stopped unexpectedly. Check the server log.");
     expect(await concord.sync("FUND")).toEqual({ added: 500 });
     const healed = concord.asset("FUND");
     expect(healed.syncedLedger).toBe(200);
