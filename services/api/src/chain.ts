@@ -111,8 +111,18 @@ export interface RawEvent {
   value: string;
 }
 
-/** Account, contract, muxed account, liquidity pool or claimable balance. */
-const ADDRESS = /^[GCMLB][A-Z2-7]{55,}$/;
+/** StrKeys have checksums; G/C/L are 56 chars, B is 58, M is 69. */
+const ADDRESS = /^(?:[GCL][A-Z2-7]{55}|B[A-Z2-7]{57}|M[A-Z2-7]{68})$/;
+function isValidAddress(value: string): boolean {
+  if (!ADDRESS.test(value)) return false;
+  return (
+    StrKey.isValidEd25519PublicKey(value) ||
+    StrKey.isValidContract(value) ||
+    StrKey.isValidMed25519PublicKey(value) ||
+    StrKey.isValidLiquidityPool(value) ||
+    StrKey.isValidClaimableBalance(value)
+  );
+}
 
 /** Event ids already reported as unreadable, so a page that is fetched twice logs once. */
 const loggedMalformed = new Set<string>();
@@ -141,7 +151,7 @@ export function decodeEventDetailed(raw: RawEvent): Decoded {
     const topics = raw.topic.map(native);
     const kind = topics[0];
     if (typeof kind !== "string" || !isEventKind(kind)) return IGNORED;
-    const addresses = topics.slice(1).filter((t): t is string => typeof t === "string" && ADDRESS.test(t));
+    const addresses = topics.slice(1).filter((t): t is string => typeof t === "string" && isValidAddress(t));
     const last = addresses.at(-1);
     if (!last) return MALFORMED;
     const time = Date.parse(raw.ledgerClosedAt);
