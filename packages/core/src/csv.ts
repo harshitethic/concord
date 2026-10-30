@@ -5,9 +5,12 @@ export function parseCsv(text: string): string[][] {
   let field = "";
   let quoted = false;
   let afterQuote = false;
+  let physicalLine = 1;
+  let openingQuoteLine = 1;
   const src = text.replace(/^﻿/, "");
   for (let i = 0; i < src.length; i++) {
     const c = src[i]!;
+    if (c === "\r" || (c === "\n" && src[i - 1] !== "\r")) physicalLine++;
     if (quoted) {
       if (c === '"') {
         if (src[i + 1] === '"') {
@@ -27,6 +30,7 @@ export function parseCsv(text: string): string[][] {
       const column = lines[lines.length - 1]!.length + 1;
       throw new Error("unexpected character after closing quote at line " + lines.length + ", column " + column);
     } else if (c === '"' && field === "") {
+      openingQuoteLine = physicalLine;
       quoted = true;
     } else if (c === ",") {
       row.push(field);
@@ -43,7 +47,7 @@ export function parseCsv(text: string): string[][] {
       field += c;
     }
   }
-  if (quoted) throw new Error("unterminated quoted field");
+  if (quoted) throw new Error("unterminated quoted field starting on line " + openingQuoteLine);
   if (field !== "" || row.length > 0) {
     row.push(field);
     rows.push(row);
