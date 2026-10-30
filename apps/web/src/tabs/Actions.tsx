@@ -159,6 +159,9 @@ function Detail({ asset, action, onChange }: { asset: AssetSummary; action: Acti
           by itself once it does.
         </Notice>
       )}
+      {action.state === "pending" && !res && (
+        <Notice>Reconciling this action. The snapshot is ready and the result is still being calculated.</Notice>
+      )}
       {res && (
         <>
           <WarningList warnings={res.warnings} />
@@ -184,9 +187,9 @@ function Detail({ asset, action, onChange }: { asset: AssetSummary; action: Acti
             title="Entitlements"
             aside={<span className="text-xs text-muted">Chain read through {when(res.reconciledThrough)}</span>}
           >
-            {res.lines.length === 0 && (
+            {res.lines.length === 0 ? (
               <p className="text-[13px] text-muted">Nobody held units at the record time, so nothing was due.</p>
-            )}
+            ) : (
             <TableWrap>
               <table className="tbl">
                 <thead>
@@ -233,6 +236,7 @@ function Detail({ asset, action, onChange }: { asset: AssetSummary; action: Acti
                 </tbody>
               </table>
             </TableWrap>
+            )}
           </Section>
         </>
       )}
