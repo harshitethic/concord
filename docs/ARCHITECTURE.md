@@ -54,7 +54,8 @@ the break moves.
 
 ### `apps/web` — the dashboard
 
-React 19, Vite and Tailwind 4. `api.ts` is the only place that talks to the server. Tabs under
+React 19, Vite and Tailwind 4. `api.ts` is the only place that talks to the server.
+See [the API type-sync contributor guide](./contributing/web-api-types.md) when adding an endpoint or changing a JSON response. Tabs under
 `src/tabs` are per-asset views (reconciliation, holdings, events, corporate actions, controls,
 export); `Settings.tsx` and `Auth.tsx` cover workspace and sign-in. In production the API serves
 the built files from the same origin, so there is no CORS and the session cookie is `SameSite=Strict`.
