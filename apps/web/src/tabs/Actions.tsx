@@ -287,11 +287,11 @@ export function Actions({ asset, assets, onChange }: { asset: AssetSummary; asse
               {actions.map((a) => (
                 <tr
                   key={a.id}
-                  onClick={() => setSelected(a.id)}
-                  className={`cursor-pointer ${a.id === current?.id ? "bg-sunken" : "hover:bg-sunken"}`}
+                  aria-current={a.id === current?.id ? "true" : undefined}
+                  className={a.id === current?.id ? "bg-sunken" : "hover:bg-sunken"}
                 >
                   <td>
-                    <button type="button" className="text-left font-medium" onClick={() => setSelected(a.id)}>
+                    <button type="button" className="w-full text-left font-medium" onClick={() => setSelected(a.id)}>
                       {a.label}
                     </button>
                   </td>
