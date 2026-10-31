@@ -304,11 +304,17 @@ export function localToIso(value: string): string {
 export const LOCAL_TIME_HINT = `Your local time (${Intl.DateTimeFormat().resolvedOptions().timeZone}). Tables show UTC.`;
 
 export function ErrorNote({ message }: { message: string }) {
+  const wrongWorkspace = /different workspace|missing its workspace context/i.test(message);
   return (
-    <p role="alert" className="flex items-start gap-2 rounded bg-bad-bg px-3 py-2 text-[13px] text-bad">
+    <div role="alert" className="flex items-start gap-2 rounded bg-bad-bg px-3 py-2 text-[13px] text-bad">
       <WarningCircle size={16} className="mt-0.5 shrink-0" />
-      {message}
-    </p>
+      <div className="flex flex-col items-start gap-2">
+        <span>{message}</span>
+        {wrongWorkspace && (
+          <Button onClick={() => location.reload()}>Reload this workspace</Button>
+        )}
+      </div>
+    </div>
   );
 }
 
