@@ -209,6 +209,7 @@ export function short(value: string): string {
 export function Addr({ value }: { value: string | null | undefined }) {
   const network = useContext(NetworkContext);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   if (!value) return <span className="text-muted">none</span>;
   const kind = value.startsWith("C") ? "contract" : "account";
   return (
@@ -218,13 +219,17 @@ export function Addr({ value }: { value: string | null | undefined }) {
         title={`${value} (click to copy)`}
         onClick={() => {
           // The clipboard is only there on a secure page; without it the full value is still in the tooltip.
-          void navigator.clipboard
-            ?.writeText(value)
+          setCopyError(false);
+          if (!navigator.clipboard?.writeText) {
+            setCopyError(true);
+            return;
+          }
+          void navigator.clipboard.writeText(value)
             .then(() => {
               setCopied(true);
               setTimeout(() => setCopied(false), 1200);
             })
-            .catch(() => undefined);
+            .catch(() => setCopyError(true));
         }}
         className="num inline-flex items-center gap-1 rounded hover:text-accent"
       >
@@ -235,6 +240,7 @@ export function Addr({ value }: { value: string | null | undefined }) {
           <Copy size={12} className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
         )}
       </button>
+      {copyError && <span role="status" className="text-xs text-bad">Copy failed</span>}
       {/^[GC][A-Z2-7]{55}$/.test(value) && (
         <a
           href={`${explorer(network)}/${kind}/${value}`}
