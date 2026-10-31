@@ -6,7 +6,6 @@ import { ORG_MIGRATIONS } from "./schema.js";
 export type Row = Record<string, string | number | null>;
 type Param = string | number | bigint | null;
 export type SqliteSynchronous = "normal" | "full";
-export type SqliteSynchronous = "normal" | "full";
 
 /** Thin wrapper over node:sqlite. Amounts are stored as decimal strings of the smallest unit. */
 export class Db {
