@@ -333,7 +333,9 @@ function InviteSignIn({ email, lead, org, token }: { email: string; lead: string
 
 export function Reset({ token }: { token: string }) {
   const [password, setPassword] = useState("");
-  const form = useSubmit(() => api<Me>("/auth/reset", { body: { token, password } }));
+  const form = useSubmit(() => password.length < PASSWORD_MIN
+    ? Promise.reject(new Error(`Password must have at least ${PASSWORD_MIN} characters.`))
+    : api<Me>("/auth/reset", { body: { token, password } }));
   const { me } = useSession();
   useEffect(() => {
     // Once the new password is set the server signs the visitor in; leave the spent link behind.
