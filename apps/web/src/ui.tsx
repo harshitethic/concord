@@ -124,12 +124,24 @@ export function Segmented<T extends string>({
 }) {
   return (
     <div role="radiogroup" aria-label={label} className="inline-flex rounded border border-line-strong bg-sunken p-0.5">
-      {options.map((o) => (
+      {options.map((o, index) => (
         <button
           key={o.value}
           type="button"
           role="radio"
           aria-checked={o.value === value}
+          tabIndex={o.value === value ? 0 : -1}
+          onKeyDown={(event) => {
+            let next = index;
+            if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % options.length;
+            else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + options.length) % options.length;
+            else if (event.key === "Home") next = 0;
+            else if (event.key === "End") next = options.length - 1;
+            else return;
+            event.preventDefault();
+            onChange(options[next]!.value);
+            event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+          }}
           onClick={() => onChange(o.value)}
           className={`h-6 rounded-[3px] px-2.5 text-xs font-medium transition-colors duration-150 ${o.value === value ? "bg-surface text-text shadow-[0_0_0_1px_var(--line-strong)]" : "text-muted hover:text-text"}`}
         >
