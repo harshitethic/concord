@@ -113,6 +113,35 @@ describe("csv", () => {
   });
 });
 
+describe("register holder identity validation", () => {
+  it.each([
+    ["control in identifier", "H\u0000bad", "Valid Name", "holder_id contains control characters"],
+    ["control in name", "H1", "Bad\u0007Name", "holder_name contains control characters"],
+    ["oversized identifier", "H".repeat(201), "Valid Name", "holder_id must be at most 200 characters"],
+    ["oversized name", "H1", "X".repeat(201), "holder_name must be at most 200 characters"],
+  ])("reports %s as a ParseIssue", (_label, id, name, message) => {
+    const { positions, issues } = parseRegisterCsv(`holder_id,holder_name,units\n"${id}","${name}",1\n`);
+    expect(positions).toEqual([]);
+    expect(issues).toEqual([{ line: 2, message }]);
+  });
+
+  it("accepts 200-character identifiers and Unicode names", () => {
+    const id = "H".repeat(200);
+    const name = "Café 投资者";
+    const { positions, issues } = parseRegisterCsv(`holder_id,holder_name,units\n${id},${name},1\n`);
+    expect(issues).toEqual([]);
+    expect(positions).toMatchObject([{ holderId: id, holderName: name }]);
+  });
+
+  it("reports control characters without discarding other valid rows", () => {
+    const { positions, issues } = parseRegisterCsv(
+      'holder_id,holder_name,units\n"bad\u0000id",Ignored,1\nGood1,Zoë,2\n',
+    );
+    expect(issues).toEqual([{ line: 2, message: "holder_id contains control characters" }]);
+    expect(positions).toMatchObject([{ holderId: "Good1", holderName: "Zoë" }]);
+  });
+});
+
 describe("register decimal precision", () => {
   it("imports whole-token units exactly with zero decimal places", () => {
     const { positions, issues } = parseRegisterCsv("holder_id,account,units\nH0,A,1\n", 0);
