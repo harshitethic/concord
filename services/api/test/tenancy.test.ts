@@ -514,6 +514,25 @@ describe("Google sign-in", () => {
     ...extra,
   });
 
+  it.each([
+    ["expired", Math.floor(Date.now() / 1000) - 10, false],
+    ["missing", undefined, false],
+    ["valid", Math.floor(Date.now() / 1000) + 30, true],
+  ] as const)("validates Google ID-token expiry: %s (#760)", async (scenario, exp, accepted) => {
+    const email = "expiry-" + scenario + "@example.test";
+    const { h, box } = withGoogle(good(email, { exp }));
+    const client = new Client(h.app);
+    const { state, nonce } = await begin(h, client);
+    box.nonce = nonce;
+    const response = await client.call("/api/auth/google/callback?code=abc&state=" + encodeURIComponent(state));
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      ORIGIN + (accepted ? "/#/" : "/#/signin?error=google_failed"),
+    );
+    const users = h.control.get<{ n: number }>("SELECT COUNT(*) AS n FROM users")!.n;
+    expect(users).toBe(accepted ? 1 : 0);
+  });
+
   it("is not offered unless configured", async () => {
     const h = harness();
     expect(await (await h.app.request("/api/auth/config")).json()).toMatchObject({ google: false });
