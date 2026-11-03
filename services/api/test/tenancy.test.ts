@@ -1446,3 +1446,36 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("stale workspace header guard (#769)", () => {
+  it("rejects reads and writes without mutating either workspace", async () => {
+    const h = harness();
+    const owner = await new Client(h.app).signUp("owner-stale@example.test", "Owner workspace");
+    const invite = await owner.json<{ link: string }>("/api/org/invites", {
+      body: { email: "member-stale@example.test" },
+    });
+    const cat = await new Client(h.app).signUp("member-stale@example.test", "Member workspace");
+    const originalOrg = cat.orgId;
+    const token = invite.link.split("/#/invite/")[1]!;
+    const joined = await cat.json<{ org: { id: string } }>("/api/auth/invites/accept", {
+      body: { token },
+    });
+    expect(joined.org.id).toBe(owner.orgId);
+    expect(originalOrg).not.toBe(owner.orgId);
+
+    const stale = { "x-concord-org": originalOrg };
+    const rejects = [
+      cat.call("/api/overview", { headers: stale }),
+      cat.call("/api/assets", { headers: stale, body: { network: "testnet", asset: "not-an-asset" } }),
+      cat.call("/api/assets/FUND/notes", { method: "PUT", headers: stale, body: {} }),
+      cat.call("/api/org", { method: "DELETE", headers: stale }),
+    ];
+    for (const response of await Promise.all(rejects)) {
+      expect(response.status).toBe(409);
+    }
+    expect(h.auth.orgExists(owner.orgId)).toBe(true);
+    expect(h.auth.orgExists(originalOrg)).toBe(true);
+    expect((await cat.call("/api/overview", { headers: { "x-concord-org": owner.orgId } })).status).toBe(200);
+    expect((await cat.call("/api/overview")).status).toBe(200);
+  });
+});
