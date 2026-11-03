@@ -1446,3 +1446,39 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("workspace ownership rules (#751)", () => {
+  it("rejects invalid roles and sole-owner demotion, but allows two owners", async () => {
+    const h = harness();
+    const ann = await new Client(h.app).signUp("ann-owner@example.test", "Owners Inc");
+    const owners = () => h.control.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM memberships WHERE org_id = ? AND role = 'owner'", ann.orgId,
+    )!.n;
+    const setRole = (actor: Client, userId: string, role: unknown) => actor.call("/api/org/members/" + userId, {
+      method: "PATCH", body: { role },
+    });
+    const first = await setRole(ann, ann.userId, "member");
+    expect(first.status).toBe(400);
+    expect(await first.json()).toEqual({ error: "A workspace needs an owner." });
+    expect(owners()).toBe(1);
+    const invite = await ann.json<{ link: string }>("/api/org/invites", {
+      body: { email: "bob-owner@example.test" },
+    });
+    const bob = new Client(h.app);
+    const accepted = await bob.json<{ user: { id: string } }>("/api/auth/invites/accept", {
+      body: { token: invite.link.split("/#/invite/")[1]!, name: "Bob Owner", password: "correct horse battery" },
+    });
+    expect((await setRole(bob, ann.userId, "member")).status).toBe(403);
+    const invalid = await setRole(ann, accepted.user.id, "root");
+    expect(await invalid.json()).toEqual({ error: "Role must be owner or member." });
+    const missing = await setRole(ann, "ffffffffffffffff", "owner");
+    expect(await missing.json()).toEqual({ error: "That person is not in this workspace." });
+    expect(owners()).toBe(1);
+    expect((await setRole(ann, accepted.user.id, "owner")).status).toBe(200);
+    expect(owners()).toBe(2);
+    expect((await setRole(ann, ann.userId, "member")).status).toBe(200);
+    expect(owners()).toBe(1);
+    expect((await setRole(bob, ann.userId, "owner")).status).toBe(200);
+    expect(owners()).toBe(2);
+  });
+});
