@@ -1446,3 +1446,35 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("password reset expiry boundary (#770)", () => {
+  it("rejects a 24-hour-old token and rotates sessions just before expiry", async () => {
+    const day = 86_400_000;
+    const expired = harness();
+    await new Client(expired.app).signUp("expired@example.test", "Expired");
+    const bad = expired.auth.createResetToken("expired@example.test");
+    expired.now.value += day;
+    const tooLate = await new Client(expired.app).call("/api/auth/reset", {
+      body: { token: bad, password: "a new secure password" },
+    });
+    expect(tooLate.status).toBe(400);
+    expect(await tooLate.json()).toEqual({ error: "This reset link is no longer valid." });
+
+    const h = harness();
+    const previous = await new Client(h.app).signUp("reset-boundary@example.test", "Reset boundary");
+    const good = h.auth.createResetToken("reset-boundary@example.test");
+    h.now.value += day - 1_000;
+    const fresh = new Client(h.app);
+    expect((await fresh.call("/api/auth/reset", {
+      body: { token: good, password: "replacement password" },
+    })).status).toBe(200);
+    expect((await fresh.call("/api/auth/me")).status).toBe(200);
+    expect((await previous.call("/api/auth/me")).status).toBe(401);
+    expect((await new Client(h.app).call("/api/auth/signin", {
+      body: { email: "reset-boundary@example.test", password: "correct horse battery" },
+    })).status).toBe(401);
+    expect((await new Client(h.app).call("/api/auth/signin", {
+      body: { email: "reset-boundary@example.test", password: "replacement password" },
+    })).status).toBe(200);
+  });
+});
