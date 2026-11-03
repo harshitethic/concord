@@ -138,3 +138,34 @@ backups of the data directory deserve the same care as the live host.
 
 No holder names, addresses or balances in this document are real; none are invented either —
 there are none.
+
+## Google ID token: trust assumption and limitations
+
+Concord performs OAuth authorization-code exchange with PKCE directly against
+`https://oauth2.googleapis.com/token` over TLS
+(`services/api/src/auth-api.ts`). The code decodes the returned `id_token`
+payload but **does not verify its cryptographic signature against Google's
+public keys**. The trust assumption is narrow: the server obtains this response
+straight from the actual Google token endpoint over an authenticated TLS
+connection and does not accept caller-supplied JWT claims.
+
+Even under that assumption, the callback checks the issuer
+(`https://accounts.google.com` or `accounts.google.com`), that
+`aud` matches `CONCORD_GOOGLE_CLIENT_ID`, that `sub` and `email`
+are present, that `exp` has not passed, and that `nonce` matches the
+random value in the HMAC-signed OAuth state cookie. An identity can be used
+only when `email_verified` is true; when linking Google to an existing
+account, the verified email must also match that account's email.
+
+**Limitations:** a compromised TLS trust store, a substituted token-endpoint
+response, an untrusted HTTP interception proxy, or a code change allowing
+caller-supplied tokens invalidates the assumption. Decoding a JWT is not the
+same as verifying its signature, and the current checks do not provide an
+independent cryptographic proof of the token's origin. Do not describe this
+implementation as full OIDC ID-token verification. Follow the proposed
+[JWKS signature verification hardening](https://github.com/useconcord/concord/issues/689)
+for defense in depth.
+
+The OAuth cookie uses a per-process HMAC secret: a callback arriving at
+another instance or after process restart may lose its saved state and fail.
+See [architectural limits](./limits.md).
