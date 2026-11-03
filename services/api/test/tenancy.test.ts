@@ -1446,3 +1446,26 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("session last-seen refresh (#745)", () => {
+  it("writes at the ten-minute boundary and extends idle expiry", async () => {
+    const h = harness();
+    const client = await new Client(h.app).signUp("refreshed@example.test", "Refresh Corp");
+    const t0 = h.now.value;
+    const seen = () => h.control.get<{ last_seen_at: string }>(
+      "SELECT last_seen_at FROM sessions LIMIT 1",
+    )!.last_seen_at;
+    const initial = seen();
+    h.now.value = t0 + 60_000;
+    expect((await client.call("/api/auth/me")).status).toBe(200);
+    expect(seen()).toBe(initial);
+    h.now.value = t0 + 10 * 60_000 - 1;
+    expect((await client.call("/api/auth/me")).status).toBe(200);
+    expect(seen()).toBe(initial);
+    h.now.value = t0 + 10 * 60_000;
+    expect((await client.call("/api/auth/me")).status).toBe(200);
+    expect(seen()).toBe(new Date(h.now.value).toISOString());
+    h.now.value += 6 * 86_400_000 + 23 * 3_600_000;
+    expect((await client.call("/api/auth/me")).status).toBe(200);
+  });
+});
