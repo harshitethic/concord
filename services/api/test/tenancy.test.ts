@@ -1446,3 +1446,44 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("password must differ from account email (#747)", () => {
+  it.each(["signup", "change", "reset", "invite"] as const)(
+    "rejects the same email as a password in %s",
+    async (entry) => {
+      const h = harness();
+      const email = "long.address@example.test";
+      const invalid = email.toUpperCase();
+      let response: Response;
+      let acceptValid: () => Promise<Response>;
+      if (entry === "signup") {
+        const client = new Client(h.app);
+        const body = (password: string) => ({
+          email, name: "Someone", password, orgName: "Email Password",
+        });
+        response = await client.call("/api/auth/signup", { body: body(invalid) });
+        acceptValid = () => client.call("/api/auth/signup", { body: body("correct horse battery") });
+      } else if (entry === "change") {
+        const client = await new Client(h.app).signUp(email, "Email Password");
+        response = await client.call("/api/auth/password", { body: { current: "correct horse battery", next: invalid } });
+        acceptValid = () => client.call("/api/auth/password", { body: { current: "correct horse battery", next: "different secure password" } });
+      } else if (entry === "reset") {
+        await new Client(h.app).signUp(email, "Email Password");
+        const token = h.auth.createResetToken(email);
+        const client = new Client(h.app);
+        response = await client.call("/api/auth/reset", { body: { token, password: invalid } });
+        acceptValid = () => client.call("/api/auth/reset", { body: { token, password: "different secure password" } });
+      } else {
+        const owner = await new Client(h.app).signUp("owner-invite@example.test", "Email Password");
+        const invite = await owner.json<{ link: string }>("/api/org/invites", { body: { email } });
+        const token = invite.link.split("/#/invite/")[1]!;
+        const client = new Client(h.app);
+        response = await client.call("/api/auth/invites/accept", { body: { token, name: "Someone", password: invalid } });
+        acceptValid = () => client.call("/api/auth/invites/accept", { body: { token, name: "Someone", password: "different secure password" } });
+      }
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "Choose a password that is not your email address." });
+      expect((await acceptValid()).ok).toBe(true);
+    },
+  );
+});
