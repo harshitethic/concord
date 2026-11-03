@@ -514,6 +514,27 @@ describe("Google sign-in", () => {
     ...extra,
   });
 
+  it.each([false, true])("clears OAuth state and does not exchange tokens when Google is cancelled (link=%s) (#757)", async (link) => {
+    let fetched = 0;
+    const fetcher = (async () => { fetched++; throw new Error("Google exchange should not happen"); }) as typeof globalThis.fetch;
+    const h = harness({ google, fetch: fetcher });
+    const client = link
+      ? await new Client(h.app).signUp("link-cancel@example.test", "Link Cancel")
+      : new Client(h.app);
+    const { state } = await begin(h, client, link ? "?link=1" : "");
+    const response = await client.call(
+      "/api/auth/google/callback?error=access_denied&state=" + encodeURIComponent(state),
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      ORIGIN + (link ? "/#/settings?error=google_cancelled" : "/#/signin?error=google_cancelled"),
+    );
+    const cookie = response.headers.getSetCookie().find((value) => value.includes("concord_oauth="))!;
+    expect(cookie).toContain("Max-Age=0");
+    expect(cookie).toContain("Path=/");
+    expect(fetched).toBe(0);
+  });
+
   it("is not offered unless configured", async () => {
     const h = harness();
     expect(await (await h.app.request("/api/auth/config")).json()).toMatchObject({ google: false });
