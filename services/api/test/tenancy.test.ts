@@ -1446,3 +1446,21 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("session maximum lifetime (#744)", () => {
+  it("expires at exactly 30 days even when accessed regularly", async () => {
+    const h = harness();
+    const client = await new Client(h.app).signUp("lifetime@example.test", "Lifetime Inc");
+    const t0 = h.now.value;
+    const day = 86_400_000;
+    for (const days of [6, 12, 18, 24]) {
+      h.now.value = t0 + days * day;
+      expect((await client.call("/api/auth/me")).status, "day " + days).toBe(200);
+    }
+    h.now.value = t0 + 30 * day - 1;
+    expect((await client.call("/api/auth/me")).status).toBe(200);
+    h.now.value = t0 + 30 * day;
+    expect((await client.call("/api/auth/me")).status).toBe(401);
+    expect(h.control.get<{ n: number }>("SELECT COUNT(*) AS n FROM sessions")?.n).toBe(0);
+  });
+});
