@@ -93,6 +93,14 @@ export async function verifyPassword(password: string, stored: string): Promise<
   }
 }
 
+/** Compare the cost in a verified password hash with the current policy. */
+export function needsPasswordRehash(stored: string, cost: ScryptCost): boolean {
+  const [scheme, N, r, p] = stored.split("$");
+  return scheme === "scrypt" && (
+    Number(N) !== cost.N || Number(r) !== cost.r || Number(p) !== cost.p
+  );
+}
+
 // ── signed values ───────────────────────────────────────────────────────────
 
 /** Signs short-lived cookie payloads so a value planted from elsewhere is refused. */
