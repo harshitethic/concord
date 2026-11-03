@@ -1446,3 +1446,34 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("shared IP sign-in rate limiting (#743)", () => {
+  it("blocks a 21st distinct login from the same address", async () => {
+    const h = harness();
+    const client = new Client(h.app);
+    const signIn = (i: number) => client.call("/api/auth/signin", {
+      body: { email: "never-" + i + "@example.test", password: "wrong credentials" },
+    });
+    for (let i = 0; i < 20; i++) expect((await signIn(i)).status).toBe(401);
+    const blocked = await signIn(20);
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
+  });
+
+  it("counts trusted forwarded addresses separately and rolls over at ten minutes", async () => {
+    const { RateLimiter } = await import("../src/security.js");
+    const clock = { value: Date.now() };
+    const limiter = new RateLimiter(() => clock.value);
+    const h = harness({ trustProxyHops: 1, limiter });
+    const client = new Client(h.app);
+    const signIn = (i: number, ip: string) => client.call("/api/auth/signin", {
+      body: { email: "visitor-" + i + "@example.test", password: "wrong credentials" },
+      headers: { "x-forwarded-for": ip },
+    });
+    for (let i = 0; i < 20; i++) expect((await signIn(i, "9.9.9.9")).status).toBe(401);
+    expect((await signIn(20, "9.9.9.9")).status).toBe(429);
+    expect((await signIn(20, "8.8.8.8")).status).toBe(401);
+    clock.value += 10 * 60_000 + 1;
+    expect((await signIn(21, "9.9.9.9")).status).toBe(401);
+  });
+});
