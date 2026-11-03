@@ -101,7 +101,9 @@ docker run -p 4400:4400 -v concord-data:/data -e CONCORD_PUBLIC_URL=https://conc
 ```
 
 Concord is a single process with a background indexer and SQLite files, so it needs one
-always-on instance with a local disk. It does not fit serverless hosts.
+always-on instance with a local disk. Rate-limit counters reset on process restart, and
+are not coordinated across multiple instances; the Google OAuth state key is process-local.
+It does not fit serverless hosts.
 [`render.yaml`](./render.yaml) deploys it to Render's **free** plan for a preview only: that plan
 has no persistent disk, so every account, upload and sign-off is erased when the service restarts or
 spins down after fifteen idle minutes (set `CONCORD_EPHEMERAL=1` to make the dashboard say so). For
