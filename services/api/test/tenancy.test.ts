@@ -1446,3 +1446,24 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("password change rate limiting (#748)", () => {
+  it("limits even incorrect current passwords per user and expires after 15 minutes", async () => {
+    const { RateLimiter } = await import("../src/security.js");
+    const clock = { value: Date.now() };
+    const h = harness({ limiter: new RateLimiter(() => clock.value) });
+    const first = await new Client(h.app).signUp("password-limit-a@example.test", "First org");
+    const second = await new Client(h.app).signUp("password-limit-b@example.test", "Second org");
+    const change = (user: Client, current: string) => user.call("/api/auth/password", {
+      body: { current, next: "new replacement password" },
+    });
+    for (let i = 0; i < 10; i++) expect((await change(first, "wrong password")).status).toBe(400);
+    const blocked = await change(first, "wrong password");
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect((await change(first, "correct horse battery")).status).toBe(429);
+    expect((await change(second, "wrong password")).status).toBe(400);
+    clock.value += 15 * 60_000 + 1;
+    expect((await change(first, "correct horse battery")).status).toBe(200);
+  });
+});
