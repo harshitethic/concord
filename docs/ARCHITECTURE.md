@@ -111,3 +111,25 @@ real password hashing at a low cost. The dashboard has no automated tests yet.
 Documented in [`docs/limits.md`](./limits.md): RPC history of about seven days, supply understated by
 pool/claimable/contract balances for classic assets, one process and one disk, no email ([`docs/adr/0003-no-email.md`](./adr/0003-no-email.md)). Changes
 that remove a limit should update that file.
+
+
+## In-memory limit and OAuth state consequences
+
+The HTTP process owns fixed-window `RateLimiter` counters in memory
+(`services/api/src/security.ts`). Counters and failed-sign-in lockouts
+are therefore **lost on every process restart**, even when `control.db`
+and workspace files are persistent. Running multiple independent replicas
+also creates separate, uncoordinated counters: nominal limits are not
+shared across replicas or enforced globally.
+
+The signed OAuth state-cookie secret is created at process startup
+(`services/api/src/auth-api.ts` and `Signer`). A Google callback
+reaching another instance, or returning after a restart, can fail with
+invalid state even when the Google login itself succeeded.
+
+These constraints are independent of SQLite persistence and make
+adding another replica an incorrect deployment strategy. Run one
+long-lived process with persistent **local** storage unless shared
+rate limiting, OAuth state, and indexing coordination are redesigned.
+See [security assumptions](./SECURITY-MODEL.md) and
+[deployment limits](./limits.md).
