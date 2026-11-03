@@ -1446,3 +1446,34 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("cookie lifecycle attributes (#771)", () => {
+  it.each([true, false])("keeps signout and OAuth cookies correct for TLS=%s", async (tls) => {
+    const origin = tls ? "https://concord.example" : ORIGIN;
+    const h = harness({
+      publicUrl: origin,
+      google: { clientId: "test-google-client", clientSecret: "test-google-secret" },
+    });
+    const client = await new Client(h.app, origin).signUp("cookie-attrs@example.test", "Cookie Corp");
+    const signout = await client.call("/api/auth/signout", { method: "POST" });
+    expect(signout.status).toBe(200);
+    const cookie = signout.headers.getSetCookie().find((v) => v.includes("concord_session="))!;
+    expect(cookie).toBeTruthy();
+    const [name, ...attributes] = cookie.split(";").map((s) => s.trim().toLowerCase());
+    expect(name).toBe(tls ? "__host-concord_session=" : "concord_session=");
+    expect(attributes).toContain("max-age=0");
+    expect(attributes).toContain("path=/");
+    expect(attributes.some((v) => v === "secure")).toBe(tls);
+
+    const googleStart = await client.call("/api/auth/google/start");
+    expect(googleStart.status).toBe(302);
+    const oauth = googleStart.headers.getSetCookie().find((v) => v.includes("concord_oauth="))!;
+    const [oauthName, ...oauthAttributes] = oauth.split(";").map((s) => s.trim().toLowerCase());
+    expect(oauthName).toMatch(tls ? /^__host-concord_oauth=/ : /^concord_oauth=/);
+    expect(oauthAttributes).toContain("httponly");
+    expect(oauthAttributes).toContain("path=/");
+    expect(oauthAttributes).toContain("samesite=lax");
+    expect(oauthAttributes).toContain("max-age=600");
+    expect(oauthAttributes.some((v) => v === "secure")).toBe(tls);
+  });
+});
