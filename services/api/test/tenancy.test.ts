@@ -1446,3 +1446,28 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("JSON request body validation (#766)", () => {
+  it.each([
+    ["[]", "application/json", 400, "request body must be a JSON object"],
+    ["null", "application/json", 400, "request body must be a JSON object"],
+    ["42", "application/json", 400, "request body must be a JSON object"],
+    ['"x"', "application/json", 400, "request body must be a JSON object"],
+    ["{", "application/json", 400, "request body must be JSON"],
+    ["", "application/json", 400, "request body must be JSON"],
+    ['{"email":"unknown@example.test","password":"anything"}', "application/json; charset=utf-8", 401, "Wrong email or password."],
+    ['{"email":"unknown@example.test","password":"anything"}', "application/json;charset=UTF-8", 401, "Wrong email or password."],
+    ['{"email":"unknown@example.test","password":"anything"}', "text/plain", 400, "request body must be JSON"],
+    ['{"email":"unknown@example.test","password":"anything"}', "multipart/form-data", 400, "request body must be JSON"],
+    ['{"email":"unknown@example.test","password":"anything"}', null, 400, "request body must be JSON"],
+  ] as const)("rejects or accepts body %j with type %j", async (body, contentType, status, message) => {
+    const h = harness();
+    const response = await h.app.request("/api/auth/signin", {
+      method: "POST",
+      headers: { origin: ORIGIN, ...(contentType ? { "content-type": contentType } : {}) },
+      body,
+    });
+    expect(response.status).toBe(status);
+    expect(await response.json()).toEqual({ error: message });
+  });
+});
