@@ -1446,3 +1446,32 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("replacement and validation of invitations (#753)", () => {
+  it("replaces an old token, coalesces unknown roles, and rejects existing members", async () => {
+    const h = harness();
+    const owner = await new Client(h.app).signUp("invite-owner@example.test", "Invite Owner");
+    const create = (role: string) => owner.json<{ id: string; link: string; role: string }>(
+      "/api/org/invites", { body: { email: "invite-target@example.test", role } },
+    );
+    const first = await create("root");
+    expect(first.role).toBe("member");
+    const replacement = await create("owner");
+    expect(replacement.role).toBe("owner");
+    expect(replacement.id).not.toBe(first.id);
+    const parse = (link: string) => link.split("/#/invite/")[1]!;
+    expect((await new Client(h.app).call("/api/auth/invites/lookup", {
+      body: { token: parse(first.link) },
+    })).status).toBe(400);
+    const member = new Client(h.app);
+    const joined = await member.json<{ role: string }>("/api/auth/invites/accept", {
+      body: { token: parse(replacement.link), name: "Invited Owner", password: "correct horse battery" },
+    });
+    expect(joined.role).toBe("owner");
+    const duplicate = await owner.call("/api/org/invites", {
+      body: { email: "invite-target@example.test" },
+    });
+    expect(duplicate.status).toBe(400);
+    expect(await duplicate.json()).toEqual({ error: "That person is already in this workspace." });
+  });
+});
