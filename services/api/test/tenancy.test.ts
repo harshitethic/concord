@@ -514,6 +514,26 @@ describe("Google sign-in", () => {
     ...extra,
   });
 
+  it.each([
+    ["https://accounts.google.com", true],
+    ["accounts.google.com", true],
+    ["https://evil.example", false],
+    ["http://accounts.google.com", false],
+    [undefined, false],
+  ] as const)("accepts only Google's two expected issuer formats: %s (#761)", async (issuer, accepted) => {
+    const email = "issuer-" + (issuer ?? "missing").replace(/[^a-zA-Z]/g, "-") + "@example.test";
+    const { h, box } = withGoogle(good(email, { iss: issuer }));
+    const client = new Client(h.app);
+    const { state, nonce } = await begin(h, client);
+    box.nonce = nonce;
+    const response = await client.call("/api/auth/google/callback?code=abc&state=" + encodeURIComponent(state));
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      ORIGIN + (accepted ? "/#/" : "/#/signin?error=google_failed"),
+    );
+    expect(h.control.get<{ n: number }>("SELECT COUNT(*) AS n FROM users")!.n).toBe(accepted ? 1 : 0);
+  });
+
   it("is not offered unless configured", async () => {
     const h = harness();
     expect(await (await h.app.request("/api/auth/config")).json()).toMatchObject({ google: false });
