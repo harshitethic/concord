@@ -1446,3 +1446,32 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("workspace preference on sign-in (#749)", () => {
+  it("restores the last workspace and falls back after it is deleted", async () => {
+    const h = harness();
+    const ann = await new Client(h.app).signUp("ann-home@example.test", "Ann Home");
+    const bob = await new Client(h.app).signUp("bob-home@example.test", "Bob Home");
+    const bobOrg = bob.orgId;
+    const annOrg = ann.orgId;
+    const invite = await ann.json<{ link: string }>("/api/org/invites", {
+      body: { email: "bob-home@example.test" },
+    });
+    const token = invite.link.split("/#/invite/")[1]!;
+    expect((await bob.json<{ org: { id: string } }>("/api/auth/invites/accept", {
+      body: { token },
+    })).org.id).toBe(annOrg);
+    const signin = () => bob.json<{ org: { id: string; name: string } }>("/api/auth/signin", {
+      body: { email: "bob-home@example.test", password: "correct horse battery" },
+    });
+    await bob.json("/api/auth/switch-org", { body: { orgId: bobOrg } });
+    await bob.json("/api/auth/signout", { method: "POST" });
+    expect((await signin()).org.name).toBe("Bob Home");
+    await bob.json("/api/auth/switch-org", { body: { orgId: annOrg } });
+    await bob.json("/api/auth/signout", { method: "POST" });
+    expect((await signin()).org.name).toBe("Ann Home");
+    await ann.json("/api/org", { method: "DELETE", body: { confirm: "Ann Home" } });
+    await bob.json("/api/auth/signout", { method: "POST" });
+    expect((await signin()).org.name).toBe("Bob Home");
+  });
+});
