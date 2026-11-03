@@ -4,6 +4,7 @@ import {
   PASSWORD_MAX,
   PASSWORD_MIN,
   hashPassword,
+  needsPasswordRehash,
   newId,
   newToken,
   sha256,
@@ -210,6 +211,16 @@ export class Auth {
       throw new Unauthorized(WRONG);
     }
     if (!(await verifyPassword(password, credential.secret))) throw new Unauthorized(WRONG);
+    // A successful login is the only time to update a legacy password hash.
+    // Rehash outside a DB transaction; the compare-and-swap avoids overwriting
+    // a password reset or concurrent credential change while scrypt runs.
+    if (needsPasswordRehash(credential.secret, this.cost)) {
+      const upgraded = await hashPassword(password, this.cost);
+      this.db.write(
+        "UPDATE credentials SET secret = ?, updated_at = ? WHERE user_id = ? AND kind = 'password' AND secret = ?",
+        upgraded, this.iso(), user.id, credential.secret,
+      );
+    }
     return { userId: user.id, orgId: this.homeOrg(user.id) };
   }
 
