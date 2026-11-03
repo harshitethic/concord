@@ -1446,3 +1446,23 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("successful sign-in resets failures (#742)", () => {
+  it("allows nine errors, a success, then ten more errors before the IP limit", async () => {
+    const h = harness();
+    const email = "failure-reset@example.test";
+    await new Client(h.app).signUp(email, "Failure Reset");
+    const client = new Client(h.app);
+    const signIn = (password: string) => client.call("/api/auth/signin", {
+      body: { email, password },
+    });
+    for (let i = 0; i < 9; i++) {
+      expect((await signIn("invalid password")).status, "before success " + i).toBe(401);
+    }
+    expect((await signIn("correct horse battery")).status).toBe(200);
+    // The IP bucket sees 20 attempts overall; the per-email failure bucket is cleared.
+    for (let i = 0; i < 10; i++) {
+      expect((await signIn("invalid password")).status, "after success " + i).toBe(401);
+    }
+  });
+});
