@@ -1446,3 +1446,29 @@ describe("Db", () => {
     expect("run" in db).toBe(false);
   });
 });
+
+describe("first password on a Google-only account (#746)", () => {
+  it("allows an initial password without current and requires current afterward", async () => {
+    const h = harness();
+    const { userId, orgId } = h.auth.googleSignIn({
+      sub: "google-only-member", email: "google-only@example.test",
+      name: "Google User", emailVerified: true,
+    });
+    const token = h.auth.startSession(userId, orgId);
+    const client = new Client(h.app);
+    client.cookies.set("concord_session", token);
+    const me = await client.json<{ user: { hasPassword: boolean; hasGoogle: boolean } }>("/api/auth/me");
+    expect(me.user).toMatchObject({ hasPassword: false, hasGoogle: true });
+
+    expect((await client.call("/api/auth/password", {
+      body: { next: "brand new secure password" },
+    })).status).toBe(200);
+    expect((await client.json<{ user: { hasPassword: boolean } }>("/api/auth/me")).user.hasPassword).toBe(true);
+    expect((await new Client(h.app).call("/api/auth/signin", {
+      body: { email: "google-only@example.test", password: "brand new secure password" },
+    })).status).toBe(200);
+    expect((await client.call("/api/auth/password", {
+      body: { current: "incorrect password", next: "different secure password" },
+    })).status).toBe(400);
+  });
+});
