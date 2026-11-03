@@ -43,6 +43,12 @@ function parseStatus(raw: string): HolderStatus | undefined {
   throw new Error(`unknown status "${raw}"`);
 }
 
+/** Keep control characters out of holder identifiers and human-readable labels. */
+function validateHolderField(value: string, field: "holder_id" | "holder_name"): void {
+  if (value.length > 200) throw new Error(`${field} must be at most 200 characters`);
+  if (/[\u0000-\u001f\u007f]/.test(value)) throw new Error(`${field} contains control characters`);
+}
+
 /** The register's columns as Concord names them, in the order a template lists them. */
 export const REGISTER_COLUMNS = ["holder_id", "holder_name", "account", "units", "status"] as const;
 
@@ -63,9 +69,13 @@ export function parseRegisterCsv(text: string, decimals = DEFAULT_DECIMALS): Par
     try {
       const holderId = values[idCol]!;
       if (!holderId) throw new Error("missing holder_id");
+      validateHolderField(holderId, "holder_id");
       const position: RegisterPosition = { holderId, units: parseUnits(values[unitsCol]!, decimals) };
       if (position.units < 0n) throw new Error("negative units");
-      if (nameCol && values[nameCol]) position.holderName = values[nameCol];
+      if (nameCol && values[nameCol]) {
+        validateHolderField(values[nameCol]!, "holder_name");
+        position.holderName = values[nameCol];
+      }
       if (accountCol && values[accountCol]) position.account = values[accountCol];
       if (statusCol) {
         const status = parseStatus(values[statusCol]!);
